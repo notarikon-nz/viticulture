@@ -12,7 +12,7 @@ pub fn main_menu_system(
 ) {
     if text_query.is_empty() {
         commands.spawn(TextBundle::from_section(
-            "VITICULTURE DIGITAL\n\nPress SPACE to Start Game",
+            "VITICULTURE\n\nPress SPACE to Start Game",
             TextStyle {
                 font_size: 40.0,
                 color: Color::WHITE,

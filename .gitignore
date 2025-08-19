@@ -1,1 +1,4 @@
 /target
+Cargo.lock
+design.md
+roadmap.md

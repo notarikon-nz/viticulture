@@ -144,7 +144,3 @@ Great question! Here's a practical roadmap for building out the Viticulture game
 - **Week 8**: Visually appealing and smooth
 - **Week 12**: Complete rule implementation
 - **Week 16**: Polish and feature-complete
-
-This roadmap balances rapid prototyping with solid architecture, ensuring we have a playable game early while building toward a complete implementation. Each phase builds on the previous one, allowing for testing and iteration throughout development.
-
-Would you like me to start implementing any specific part of Week 1, or would you prefer to tackle a different aspect first?

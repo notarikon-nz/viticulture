@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 
-fn setup_camera(mut commands: Commands) {
+pub fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 

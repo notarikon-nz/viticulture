@@ -8,22 +8,25 @@ use systems::*;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Viticulture Digital".into(),
-                resolution: (1200.0, 800.0).into(),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins.set(
+                WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Viticulture".into(),
+                        resolution: (1200.0, 800.0).into(),
+                        ..default()
+                    }),
+                    ..default()
+                }
+            )
+        )
         .init_state::<GameState>()
         .insert_resource(TurnOrder::default())
         .insert_resource(GameConfig::default())
         .insert_resource(CardDecks::new())
         .add_systems(Startup, (setup_camera, load_assets))
         .add_systems(
-            Update,
-            (
+            Update, (
                 main_menu_system.run_if(in_state(GameState::MainMenu)),
                 (setup_game_system, cleanup_entities_system).run_if(in_state(GameState::Setup)),
                 spring_system.run_if(in_state(GameState::Spring)),
@@ -39,8 +42,4 @@ fn main() {
             ),
         )
         .run();
-}
-
-fn setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
 }
