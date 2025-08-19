@@ -25,13 +25,15 @@ fn main() {
             Update,
             (
                 main_menu_system.run_if(in_state(GameState::MainMenu)),
-                setup_game_system.run_if(in_state(GameState::Setup)),
+                (setup_game_system, cleanup_entities_system).run_if(in_state(GameState::Setup)),
                 spring_system.run_if(in_state(GameState::Spring)),
                 mouse_input_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 worker_placement_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 fall_system.run_if(in_state(GameState::Fall)),
                 check_victory_system,
-                ui_system,
+                ui_button_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
+                update_ui_system,
+                ui_game_over_system,
             ),
         )
         .run();

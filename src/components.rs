@@ -23,6 +23,8 @@ pub struct TurnOrder {
 pub struct GameConfig {
     pub player_count: u8,
     pub target_victory_points: u8,
+    pub current_year: u8,
+    pub max_years: u8,
 }
 
 impl Default for GameConfig {
@@ -30,6 +32,8 @@ impl Default for GameConfig {
         Self {
             player_count: 2,
             target_victory_points: 20,
+            current_year: 1,
+            max_years: 7, // Game ends after 7 years if no one reaches 20 VP
         }
     }
 }
@@ -271,6 +275,18 @@ pub struct WineOrderCard {
     pub payout: u8,
 }
 
+impl WineOrderCard {
+    pub fn new(id: u32, red: u8, white: u8, vp: u8, payout: u8) -> Self {
+        Self {
+            id,
+            red_wine_needed: red,
+            white_wine_needed: white,
+            victory_points: vp,
+            payout,
+        }
+    }
+}
+
 #[derive(Resource)]
 pub struct CardDecks {
     pub vine_deck: Vec<VineCard>,
@@ -293,16 +309,19 @@ impl CardDecks {
             });
         }
         
-        // Create basic wine order cards
-        for i in 0..15 {
-            wine_order_deck.push(WineOrderCard {
-                id: i + 100,
-                red_wine_needed: if i % 3 == 0 { 2 } else { 0 },
-                white_wine_needed: if i % 3 == 1 { 2 } else { 0 },
-                victory_points: 2,
-                payout: 1,
-            });
-        }
+        // Create varied wine order cards with different VP values
+        wine_order_deck.push(WineOrderCard::new(100, 1, 0, 1, 1)); // Easy red order
+        wine_order_deck.push(WineOrderCard::new(101, 0, 1, 1, 1)); // Easy white order
+        wine_order_deck.push(WineOrderCard::new(102, 2, 0, 2, 2)); // Medium red order
+        wine_order_deck.push(WineOrderCard::new(103, 0, 2, 2, 2)); // Medium white order
+        wine_order_deck.push(WineOrderCard::new(104, 1, 1, 2, 2)); // Mixed order
+        wine_order_deck.push(WineOrderCard::new(105, 3, 0, 4, 3)); // Hard red order
+        wine_order_deck.push(WineOrderCard::new(106, 0, 3, 4, 3)); // Hard white order
+        wine_order_deck.push(WineOrderCard::new(107, 2, 2, 5, 4)); // Hard mixed order
+        wine_order_deck.push(WineOrderCard::new(108, 4, 0, 6, 5)); // Very hard red
+        wine_order_deck.push(WineOrderCard::new(109, 0, 4, 6, 5)); // Very hard white
+        wine_order_deck.push(WineOrderCard::new(110, 3, 2, 7, 6)); // Epic order
+        wine_order_deck.push(WineOrderCard::new(111, 2, 3, 7, 6)); // Epic order 2
         
         Self {
             vine_deck,
@@ -337,3 +356,22 @@ impl Hand {
         }
     }
 }
+
+#[derive(Component)]
+pub struct UIPanel;
+
+#[derive(Component)]
+pub struct PlayerDashboard {
+    pub player_id: PlayerId,
+}
+
+#[derive(Component)]
+pub struct ActionButton {
+    pub action: ActionSpace,
+}
+
+#[derive(Component)]
+pub struct TurnIndicator;
+
+#[derive(Component)]
+pub struct GameStatusText;

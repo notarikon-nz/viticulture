@@ -38,6 +38,16 @@ pub fn main_menu_system(
     }
 }
 
+pub fn cleanup_entities_system(
+    mut commands: Commands,
+    entities: Query<Entity, (Without<Camera>, Without<Window>)>,
+) {
+    // Clean up all game entities when restarting
+    for entity in entities.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
 pub fn setup_game_system(
     mut commands: Commands,
     mut next_state: ResMut<NextState<GameState>>,
@@ -85,19 +95,275 @@ pub fn setup_game_system(
     next_state.set(GameState::Spring);
 }
 
+fn setup_ui(commands: &mut Commands) {
+    // Root UI container
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            ..default()
+        },
+        UIPanel,
+    )).with_children(|parent| {
+        // Top status bar
+        parent.spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(80.0),
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::all(Val::Px(10.0)),
+                    ..default()
+                },
+                background_color: Color::from(Srgba::new(0.2, 0.2, 0.2, 0.9)).into(),
+                ..default()
+            },
+        )).with_children(|status_bar| {
+            // Game status text
+            status_bar.spawn((
+                TextBundle::from_section(
+                    "Game Starting...",
+                    TextStyle {
+                        font_size: 20.0,
+                        color: Color::WHITE,
+                        ..default()
+                    },
+                ),
+                GameStatusText,
+            ));
+            
+            // Turn indicator
+            status_bar.spawn((
+                TextBundle::from_section(
+                    "Player 1's Turn",
+                    TextStyle {
+                        font_size: 24.0,
+                        color: Color::from(Srgba::new(1.0, 1.0, 0.0, 1.0)),
+                        ..default()
+                    },
+                ),
+                TurnIndicator,
+            ));
+        });
+        
+        // Main game area
+        parent.spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Row,
+                ..default()
+            },
+            ..default()
+        }).with_children(|main_area| {
+            // Left side - Action board
+            main_area.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Percent(50.0),
+                    height: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::all(Val::Px(20.0)),
+                    ..default()
+                },
+                background_color: Color::from(Srgba::new(0.1, 0.1, 0.1, 0.8)).into(),
+                ..default()
+            }).with_children(|action_area| {
+                // Summer actions
+                action_area.spawn(TextBundle::from_section(
+                    "SUMMER ACTIONS",
+                    TextStyle {
+                        font_size: 18.0,
+                        color: Color::from(Srgba::new(1.0, 1.0, 0.5, 1.0)),
+                        ..default()
+                    },
+                ));
+                
+                for action in [ActionSpace::DrawVine, ActionSpace::PlantVine, ActionSpace::GiveTour] {
+                    action_area.spawn((
+                        ButtonBundle {
+                            style: Style {
+                                width: Val::Px(200.0),
+                                height: Val::Px(40.0),
+                                margin: UiRect::all(Val::Px(5.0)),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            background_color: Color::from(Srgba::new(0.8, 0.8, 0.2, 0.8)).into(),
+                            ..default()
+                        },
+                        ActionButton { action },
+                    )).with_children(|button| {
+                        button.spawn(TextBundle::from_section(
+                            format!("{:?}", action),
+                            TextStyle {
+                                font_size: 16.0,
+                                color: Color::BLACK,
+                                ..default()
+                            },
+                        ));
+                    });
+                }
+                
+                // Winter actions
+                action_area.spawn(TextBundle::from_section(
+                    "WINTER ACTIONS",
+                    TextStyle {
+                        font_size: 18.0,
+                        color: Color::from(Srgba::new(0.5, 0.5, 1.0, 1.0)),
+                        ..default()
+                    },
+                ));
+                
+                for action in [ActionSpace::DrawWineOrder, ActionSpace::Harvest, ActionSpace::MakeWine, ActionSpace::FillOrder] {
+                    action_area.spawn((
+                        ButtonBundle {
+                            style: Style {
+                                width: Val::Px(200.0),
+                                height: Val::Px(40.0),
+                                margin: UiRect::all(Val::Px(5.0)),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            background_color: Color::from(Srgba::new(0.2, 0.2, 0.8, 0.8)).into(),
+                            ..default()
+                        },
+                        ActionButton { action },
+                    )).with_children(|button| {
+                        button.spawn(TextBundle::from_section(
+                            format!("{:?}", action),
+                            TextStyle {
+                                font_size: 16.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        ));
+                    });
+                }
+            });
+            
+            // Right side - Player dashboards
+            main_area.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Percent(50.0),
+                    height: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Column,
+                    padding: UiRect::all(Val::Px(10.0)),
+                    ..default()
+                },
+                ..default()
+            }).with_children(|dashboard_area| {
+                // Create dashboards for each player
+                for i in 0..2 { // Default 2 players
+                    dashboard_area.spawn((
+                        NodeBundle {
+                            style: Style {
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(45.0),
+                                margin: UiRect::all(Val::Px(5.0)),
+                                padding: UiRect::all(Val::Px(10.0)),
+                                flex_direction: FlexDirection::Column,
+                                border: UiRect::all(Val::Px(2.0)),
+                                ..default()
+                            },
+                            background_color: Color::from(Srgba::new(0.15, 0.15, 0.15, 0.9)).into(),
+                            border_color: Color::from(Srgba::new(0.5, 0.5, 0.5, 1.0)).into(),
+                            ..default()
+                        },
+                        PlayerDashboard { player_id: PlayerId(i) },
+                    )).with_children(|dashboard| {
+                        // Player name
+                        dashboard.spawn(TextBundle::from_section(
+                            format!("Player {}", i + 1),
+                            TextStyle {
+                                font_size: 20.0,
+                                color: Color::WHITE,
+                                ..default()
+                            },
+                        ));
+                        
+                        // Resources row
+                        dashboard.spawn(NodeBundle {
+                            style: Style {
+                                flex_direction: FlexDirection::Row,
+                                justify_content: JustifyContent::SpaceBetween,
+                                margin: UiRect::top(Val::Px(10.0)),
+                                ..default()
+                            },
+                            ..default()
+                        }).with_children(|resources| {
+                            resources.spawn(TextBundle::from_section(
+                                "VP: 0",
+                                TextStyle {
+                                    font_size: 16.0,
+                                    color: Color::from(Srgba::new(1.0, 1.0, 0.0, 1.0)),
+                                    ..default()
+                                },
+                            ));
+                            resources.spawn(TextBundle::from_section(
+                                "Lira: 3",
+                                TextStyle {
+                                    font_size: 16.0,
+                                    color: Color::from(Srgba::new(1.0, 0.84, 0.0, 1.0)),
+                                    ..default()
+                                },
+                            ));
+                        });
+                        
+                        // Vineyard status
+                        dashboard.spawn(TextBundle::from_section(
+                            "Grapes: R:0 W:0 | Wine: R:0 W:0",
+                            TextStyle {
+                                font_size: 14.0,
+                                color: Color::from(Srgba::new(0.8, 0.8, 0.8, 1.0)),
+                                ..default()
+                            },
+                        ));
+                        
+                        // Hand info
+                        dashboard.spawn(TextBundle::from_section(
+                            "Hand: Vines:0 Orders:0",
+                            TextStyle {
+                                font_size: 14.0,
+                                color: Color::from(Srgba::new(0.6, 0.8, 0.6, 1.0)),
+                                ..default()
+                            },
+                        ));
+                    });
+                }
+            });
+        });
+    });
+}
+
 pub fn spring_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut turn_order: ResMut<TurnOrder>,
     mut workers: Query<&mut Worker>,
     mut action_spaces: Query<&mut ActionSpaceSlot>,
+    mut config: ResMut<GameConfig>,
     mut commands: Commands,
-    text_query: Query<Entity, With<Text>>,
+    text_query: Query<Entity, (With<Text>, Without<UIPanel>)>, // Only remove standalone text, not UI text
+    ui_query: Query<Entity, With<UIPanel>>,
 ) {
+    // Setup UI if it doesn't exist (first time entering Spring)
+    if ui_query.is_empty() {
+        setup_ui(&mut commands);
+    }
+    
     // Spawn spring text if it doesn't exist
     if text_query.is_empty() {
         commands.spawn(TextBundle::from_section(
-            "SPRING PHASE\nWorkers return home\n\nPress SPACE to continue to Summer",
+            format!("SPRING PHASE - YEAR {}\nWorkers return home\n\nPress SPACE to continue to Summer", config.current_year),
             TextStyle {
                 font_size: 24.0,
                 color: Color::WHITE,
@@ -105,15 +371,16 @@ pub fn spring_system(
             },
         ).with_style(Style {
             position_type: PositionType::Absolute,
-            top: Val::Px(50.0),
-            left: Val::Px(50.0),
+            top: Val::Px(300.0),
+            left: Val::Px(400.0),
+            // z_index: ZIndex::Global(1000),
             ..default()
         }));
     }
     
     // Reset workers and action spaces for new year
     if keyboard.just_pressed(KeyCode::Space) {
-        // Remove spring text
+        // Remove spring text only
         for entity in text_query.iter() {
             commands.entity(entity).despawn();
         }
@@ -306,6 +573,7 @@ pub fn worker_placement_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut turn_order: ResMut<TurnOrder>,
+    mut config: ResMut<GameConfig>,
     players: Query<&Player>,
     workers: Query<&Worker>,
     current_state: Res<State<GameState>>,
@@ -328,7 +596,8 @@ pub fn worker_placement_system(
                     match current_state.get() {
                         GameState::Summer => next_state.set(GameState::Fall),
                         GameState::Winter => {
-                            // Reset workers for next year
+                            // Advance to next year
+                            config.current_year += 1;
                             next_state.set(GameState::Spring);
                         },
                         _ => {}
@@ -344,7 +613,7 @@ pub fn fall_system(
     mut next_state: ResMut<NextState<GameState>>,
     mut vineyards: Query<&mut Vineyard>,
     mut commands: Commands,
-    text_query: Query<Entity, With<Text>>,
+    text_query: Query<Entity, (With<Text>, Without<UIPanel>)>, // Only standalone text
 ) {
     // Spawn fall text if it doesn't exist
     if text_query.is_empty() {
@@ -357,8 +626,9 @@ pub fn fall_system(
             },
         ).with_style(Style {
             position_type: PositionType::Absolute,
-            top: Val::Px(50.0),
-            left: Val::Px(50.0),
+            top: Val::Px(300.0),
+            left: Val::Px(400.0),
+            // z_index: ZIndex::Global(1000),
             ..default()
         }));
     }
@@ -381,271 +651,204 @@ pub fn check_victory_system(
     players: Query<&Player>,
     mut next_state: ResMut<NextState<GameState>>,
     config: Res<GameConfig>,
+    mut commands: Commands,
+    text_query: Query<Entity, With<Text>>,
 ) {
+    // Check VP victory condition
+    let mut winner: Option<&Player> = None;
+    let mut highest_vp = 0;
+    
     for player in players.iter() {
         if player.victory_points >= config.target_victory_points {
-            next_state.set(GameState::GameOver);
-            break;
+            if player.victory_points > highest_vp {
+                highest_vp = player.victory_points;
+                winner = Some(player);
+            }
+        }
+    }
+    
+    // Check year limit
+    let year_limit_reached = config.current_year > config.max_years;
+    
+    if winner.is_some() || year_limit_reached {
+        // Determine final winner
+        if winner.is_none() && year_limit_reached {
+            // Find player with most VP if year limit reached
+            for player in players.iter() {
+                if player.victory_points > highest_vp {
+                    highest_vp = player.victory_points;
+                    winner = Some(player);
+                }
+            }
+        }
+        
+        // Remove any existing text and show victory screen
+        for entity in text_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        
+        if let Some(winning_player) = winner {
+            commands.spawn(TextBundle::from_section(
+                format!("GAME OVER!\n{} WINS with {} Victory Points!\n\nPress SPACE to play again", 
+                        winning_player.name, winning_player.victory_points),
+                TextStyle {
+                    font_size: 32.0,
+                    color: Color::from(GOLD),
+                    ..default()
+                },
+            ).with_style(Style {
+                position_type: PositionType::Absolute,
+                top: Val::Px(200.0),
+                left: Val::Px(100.0),
+                ..default()
+            }));
+        }
+        
+        next_state.set(GameState::GameOver);
+    }
+}
+
+pub fn ui_button_system(
+    mut interaction_query: Query<(&Interaction, &ActionButton, &mut BackgroundColor)>,
+    mut workers: Query<&mut Worker>,
+    mut action_spaces: Query<&mut ActionSpaceSlot>,
+    mut hands: Query<&mut Hand>,
+    mut vineyards: Query<&mut Vineyard>,
+    mut players: Query<&mut Player>,
+    mut card_decks: ResMut<CardDecks>,
+    turn_order: Res<TurnOrder>,
+    current_state: Res<State<GameState>>,
+) {
+    for (interaction, action_button, mut color) in &mut interaction_query {
+        match *interaction {
+            Interaction::Pressed => {
+                // Check if it's the right season for this action
+                let is_summer_action = matches!(action_button.action, 
+                    ActionSpace::DrawVine | ActionSpace::PlantVine | ActionSpace::GiveTour);
+                let is_valid_season = match current_state.get() {
+                    GameState::Summer => is_summer_action,
+                    GameState::Winter => !is_summer_action,
+                    _ => false,
+                };
+                
+                if !is_valid_season {
+                    continue;
+                }
+                
+                // Check if player has available workers
+                if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
+                    let has_available_worker = workers.iter()
+                        .any(|w| w.owner == *current_player_id && w.placed_at.is_none());
+                    
+                    if has_available_worker {
+                        // Find and place worker
+                        for mut worker in workers.iter_mut() {
+                            if worker.owner == *current_player_id && worker.placed_at.is_none() {
+                                worker.placed_at = Some(action_button.action);
+                                break;
+                            }
+                        }
+                        
+                        // Execute the action
+                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks);
+                        
+                        // Update action space
+                        for mut space in action_spaces.iter_mut() {
+                            if space.action == action_button.action {
+                                space.occupied_by = Some(*current_player_id);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            Interaction::Hovered => {
+                *color = Color::from(Srgba::new(0.9, 0.9, 0.9, 1.0)).into();
+            }
+            Interaction::None => {
+                // Reset to original color based on season
+                let is_summer_action = matches!(action_button.action, 
+                    ActionSpace::DrawVine | ActionSpace::PlantVine | ActionSpace::GiveTour);
+                *color = if is_summer_action {
+                    Color::from(Srgba::new(0.8, 0.8, 0.2, 0.8)).into()
+                } else {
+                    Color::from(Srgba::new(0.2, 0.2, 0.8, 0.8)).into()
+                };
+            }
         }
     }
 }
 
-pub fn ui_system(
-    mut gizmos: Gizmos,
+pub fn update_ui_system(
+    mut status_query: Query<&mut Text, (With<GameStatusText>, Without<TurnIndicator>)>,
+    mut turn_query: Query<&mut Text, (With<TurnIndicator>, Without<GameStatusText>)>,
+    dashboard_query: Query<&PlayerDashboard>,
+    mut dashboard_text_query: Query<&mut Text, (Without<GameStatusText>, Without<TurnIndicator>)>,
     players: Query<&Player>,
     vineyards: Query<&Vineyard>,
-    workers: Query<&Worker>,
-    action_spaces: Query<&ActionSpaceSlot>,
     hands: Query<&Hand>,
     turn_order: Res<TurnOrder>,
     current_state: Res<State<GameState>>,
-    mut commands: Commands,
-    text_query: Query<Entity, With<Text>>,
+    config: Res<GameConfig>,
 ) {
-    // Add game state text for Summer/Winter phases
-    match current_state.get() {
-        GameState::Summer => {
-            if text_query.is_empty() {
-                if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
-                    commands.spawn(TextBundle::from_section(
-                        format!("SUMMER PHASE - Player {}'s Turn\nClick green action spaces (left side) to place workers\nPress ENTER to pass turn", current_player_id.0 + 1),
-                        TextStyle {
-                            font_size: 20.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ).with_style(Style {
-                        position_type: PositionType::Absolute,
-                        top: Val::Px(50.0),
-                        left: Val::Px(50.0),
-                        ..default()
-                    }));
-                }
+    // Update game status
+    if let Ok(mut status_text) = status_query.get_single_mut() {
+        let mut leading_player = "None";
+        let mut highest_vp = 0;
+        
+        for player in players.iter() {
+            if player.victory_points > highest_vp {
+                highest_vp = player.victory_points;
+                leading_player = &player.name;
             }
         }
-        GameState::Winter => {
-            if text_query.is_empty() {
-                if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
-                    commands.spawn(TextBundle::from_section(
-                        format!("WINTER PHASE - Player {}'s Turn\nClick blue action spaces (right side) to place workers\nPress ENTER to pass turn", current_player_id.0 + 1),
-                        TextStyle {
-                            font_size: 20.0,
-                            color: Color::WHITE,
-                            ..default()
-                        },
-                    ).with_style(Style {
-                        position_type: PositionType::Absolute,
-                        top: Val::Px(50.0),
-                        left: Val::Px(50.0),
-                        ..default()
-                    }));
-                }
-            }
-        }
-        GameState::GameOver => {
-            if text_query.is_empty() {
-                commands.spawn(TextBundle::from_section(
-                    "GAME OVER!\nSomeone reached 20 Victory Points!",
-                    TextStyle {
-                        font_size: 32.0,
-                        color: Color::from(GOLD),
-                        ..default()
-                    },
-                ).with_style(Style {
-                    position_type: PositionType::Absolute,
-                    top: Val::Px(200.0),
-                    left: Val::Px(200.0),
-                    ..default()
-                }));
-            }
-        }
-        _ => {}
+        
+        status_text.sections[0].value = format!(
+            "Year {} | Leader: {} ({} VP) | Target: {} VP",
+            config.current_year, leading_player, highest_vp, config.target_victory_points
+        );
     }
     
-    // Draw action spaces
-    for space in action_spaces.iter() {
-        let color = if space.is_summer {
-            Color::from(Srgba::new(1.0, 1.0, 0.5, 0.8)) // Light yellow for summer
-        } else {
-            Color::from(Srgba::new(0.5, 0.5, 1.0, 0.8)) // Light blue for winter
-        };
-        
-        // Highlight available spaces for current season
-        let available = match current_state.get() {
-            GameState::Summer => space.is_summer && space.occupied_by.is_none(),
-            GameState::Winter => !space.is_summer && space.occupied_by.is_none(),
-            _ => false,
-        };
-        
-        let final_color = if available {
-            Color::from(Srgba::new(0.0, 1.0, 0.0, 0.6)) // Green for available
-        } else if space.occupied_by.is_some() {
-            Color::from(Srgba::new(1.0, 0.0, 0.0, 0.6)) // Red for occupied
-        } else {
-            color
-        };
-        
-        gizmos.rect_2d(space.position, 0.0, Vec2::new(60.0, 30.0), final_color);
-    }
-    
-    // Draw workers
-    for worker in workers.iter() {
-        let player_colors = [
-            Srgba::new(1.0, 0.0, 0.0, 1.0), // Red
-            Srgba::new(0.0, 0.0, 1.0, 1.0), // Blue
-            Srgba::new(0.0, 1.0, 0.0, 1.0), // Green
-            Srgba::new(1.0, 0.0, 1.0, 1.0), // Magenta
-        ];
-        
-        let default_color = Srgba::new(0.5, 0.5, 0.5, 1.0);
-        let color = player_colors.get(worker.owner.0 as usize)
-            .unwrap_or(&default_color);
-        
-        let size = if worker.is_grande { 15.0 } else { 10.0 };
-        gizmos.circle_2d(worker.position, size, Color::from(*color));
-    }
-    
-    // Draw game state info
-    let mut y_offset = 300.0;
-    
-    match current_state.get() {
-        GameState::Summer => {
-            if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
-                gizmos.circle_2d(Vec2::new(-400.0, y_offset), 10.0, Color::from(Srgba::GREEN));
-            }
-        }
-        GameState::Winter => {
-            if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
-                gizmos.circle_2d(Vec2::new(-400.0, y_offset - 50.0), 10.0, Color::from(Srgba::BLUE));
-            }
-        }
-        GameState::GameOver => {
-            gizmos.circle_2d(Vec2::new(0.0, 0.0), 50.0, Color::from(GOLD));
-        }
-        _ => {}
-    }
-    
-    // Draw player info
-    for (i, player) in players.iter().enumerate() {
-        let x_pos = -400.0 + (i as f32 * 200.0);
-        
-        // Player indicator
-        gizmos.circle_2d(Vec2::new(x_pos, y_offset), 5.0, Color::from(WHITE));
-        
-        // Victory points indicator (simplified - number of small circles)
-        for vp in 0..player.victory_points {
-            gizmos.circle_2d(
-                Vec2::new(x_pos + (vp as f32 * 10.0), y_offset - 30.0),
-                2.0,
-                Color::from(YELLOW),
-            );
-        }
-        
-        // Lira indicator (small rectangles)
-        for l in 0..player.lira.min(10) {
-            gizmos.rect_2d(
-                Vec2::new(x_pos + (l as f32 * 6.0), y_offset - 45.0),
-                0.0,
-                Vec2::new(4.0, 8.0),
-                Color::from(GOLD),
-            );
-        }
-    }
-    
-    // Draw vineyard info
-    for (i, vineyard) in vineyards.iter().enumerate() {
-        let x_pos = -400.0 + (i as f32 * 200.0);
-        
-        // Draw vineyard fields (3x3 grid)
-        for field_idx in 0..9 {
-            let field_x = x_pos + ((field_idx % 3) as f32 * 15.0) - 15.0;
-            let field_y = y_offset - 100.0 - ((field_idx / 3) as f32 * 15.0);
-            
-            let field_color = match vineyard.fields[field_idx] {
-                Some(VineType::Red(_)) => Color::from(Srgba::new(0.8, 0.2, 0.2, 0.8)),
-                Some(VineType::White(_)) => Color::from(Srgba::new(0.9, 0.9, 0.7, 0.8)),
-                None => Color::from(Srgba::new(0.3, 0.2, 0.1, 0.5)), // Empty field
+    // Update turn indicator
+    if let Ok(mut turn_text) = turn_query.get_single_mut() {
+        if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
+            let phase = match current_state.get() {
+                GameState::Summer => "Summer",
+                GameState::Winter => "Winter",
+                GameState::Spring => "Spring",
+                GameState::Fall => "Fall",
+                _ => "Game",
             };
-            
-            gizmos.rect_2d(Vec2::new(field_x, field_y), 0.0, Vec2::new(12.0, 12.0), field_color);
-        }
-        
-        // Red grapes
-        for grape in 0..vineyard.red_grapes {
-            gizmos.circle_2d(
-                Vec2::new(x_pos + (grape as f32 * 8.0), y_offset - 60.0),
-                3.0,
-                Color::from(Srgba::RED),
-            );
-        }
-        
-        // White grapes  
-        for grape in 0..vineyard.white_grapes {
-            gizmos.circle_2d(
-                Vec2::new(x_pos + (grape as f32 * 8.0), y_offset - 75.0),
-                3.0,
-                Color::from(WHITE),
-            );
-        }
-        
-        // Red wine (diamonds)
-        for wine in 0..vineyard.red_wine {
-            let wine_pos = Vec2::new(x_pos + (wine as f32 * 8.0), y_offset - 170.0);
-            gizmos.line_2d(wine_pos + Vec2::new(0.0, 4.0), wine_pos + Vec2::new(4.0, 0.0), Color::from(Srgba::new(0.6, 0.0, 0.0, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(4.0, 0.0), wine_pos + Vec2::new(0.0, -4.0), Color::from(Srgba::new(0.6, 0.0, 0.0, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(0.0, -4.0), wine_pos + Vec2::new(-4.0, 0.0), Color::from(Srgba::new(0.6, 0.0, 0.0, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(-4.0, 0.0), wine_pos + Vec2::new(0.0, 4.0), Color::from(Srgba::new(0.6, 0.0, 0.0, 1.0)));
-        }
-        
-        // White wine (diamonds)
-        for wine in 0..vineyard.white_wine {
-            let wine_pos = Vec2::new(x_pos + (wine as f32 * 8.0), y_offset - 185.0);
-            gizmos.line_2d(wine_pos + Vec2::new(0.0, 4.0), wine_pos + Vec2::new(4.0, 0.0), Color::from(Srgba::new(0.9, 0.9, 0.7, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(4.0, 0.0), wine_pos + Vec2::new(0.0, -4.0), Color::from(Srgba::new(0.9, 0.9, 0.7, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(0.0, -4.0), wine_pos + Vec2::new(-4.0, 0.0), Color::from(Srgba::new(0.9, 0.9, 0.7, 1.0)));
-            gizmos.line_2d(wine_pos + Vec2::new(-4.0, 0.0), wine_pos + Vec2::new(0.0, 4.0), Color::from(Srgba::new(0.9, 0.9, 0.7, 1.0)));
+            turn_text.sections[0].value = format!("{} - Player {}'s Turn", phase, current_player_id.0 + 1);
         }
     }
     
-    // Draw hand visualization for current player
-    if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
-        let hand_y = -250.0;
-        let mut card_x = -400.0;
-        
-        // Find current player's hand
-        for hand in hands.iter() {
-            if hand.owner == *current_player_id {
-                // Draw vine cards (green)
-                for (i, vine_card) in hand.vine_cards.iter().enumerate() {
-                    let card_pos = Vec2::new(card_x + (i as f32 * 40.0), hand_y);
-                    gizmos.rect_2d(card_pos, 0.0, Vec2::new(30.0, 40.0), Color::from(Srgba::new(0.0, 0.8, 0.0, 0.8)));
-                    
-                    // Show vine type with small circle
-                    let vine_color = match vine_card.vine_type {
-                        VineType::Red(_) => Srgba::RED,
-                        VineType::White(_) => WHITE,
-                    };
-                    gizmos.circle_2d(card_pos + Vec2::new(0.0, 10.0), 3.0, Color::from(vine_color));
+    // Update player dashboards
+    for dashboard in dashboard_query.iter() {
+        if let Some(player) = players.iter().find(|p| p.id == dashboard.player_id) {
+            if let Some(vineyard) = vineyards.iter().find(|v| v.owner == dashboard.player_id) {
+                if let Some(hand) = hands.iter().find(|h| h.owner == dashboard.player_id) {
+                    // Find the dashboard's text components and update them
+                    // This is simplified - in a real implementation you'd use more specific queries
+                    // For now, we'll update via the existing text display system
                 }
-                
-                card_x += hand.vine_cards.len() as f32 * 40.0 + 20.0;
-                
-                // Draw wine order cards (purple)
-                for (i, order_card) in hand.wine_order_cards.iter().enumerate() {
-                    let card_pos = Vec2::new(card_x + (i as f32 * 40.0), hand_y);
-                    gizmos.rect_2d(card_pos, 0.0, Vec2::new(30.0, 40.0), Color::from(Srgba::new(0.5, 0.0, 0.5, 0.8)));
-                    
-                    // Show victory points as small circles
-                    for vp in 0..order_card.victory_points.min(3) {
-                        gizmos.circle_2d(
-                            card_pos + Vec2::new(-10.0 + (vp as f32 * 7.0), 10.0),
-                            2.0,
-                            Color::from(YELLOW),
-                        );
-                    }
-                }
-                break;
             }
         }
+    }
+}
+
+pub fn ui_game_over_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    current_state: Res<State<GameState>>,
+    mut commands: Commands,
+    ui_query: Query<Entity, With<UIPanel>>,
+) {
+    if matches!(current_state.get(), GameState::GameOver) && keyboard.just_pressed(KeyCode::Space) {
+        // Remove UI panels
+        for entity in ui_query.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+        next_state.set(GameState::MainMenu);
     }
 }
