@@ -118,7 +118,17 @@ fn main() {
                 fast_test_mode_system,
                 game_length_tracking_system,
                 performance_monitor_system,
+                despawn_marked_entities,
             ),
         )
         .run();
+}
+
+pub fn despawn_marked_entities(
+    mut commands: Commands,
+    query: Query<Entity, With<MarkedForDespawn>>,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn(); // ← Now safe
+    }
 }

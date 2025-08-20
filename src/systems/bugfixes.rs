@@ -222,7 +222,7 @@ pub fn emergency_recovery_system(
         
         // Clear all entities except camera
         let entities_to_clear = commands.spawn_empty().id();
-        commands.entity(entities_to_clear).despawn();
+        commands.entity(entities_to_clear).insert(MarkedForDespawn);
         
         next_state.set(GameState::MainMenu);
     }

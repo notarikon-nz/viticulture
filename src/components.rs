@@ -579,3 +579,6 @@ pub enum StructureType {
 
 #[derive(Component)]
 pub struct GameStatusText;
+
+#[derive(Component)]
+pub struct MarkedForDespawn;

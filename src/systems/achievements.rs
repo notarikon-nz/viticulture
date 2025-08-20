@@ -357,13 +357,13 @@ fn show_achievement_notification(
 pub fn achievement_notification_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut notifications: Query<(Entity, &mut AchievementNotification)>,
+    mut notifications: Query<(Entity, &mut AchievementNotification), Without<MarkedForDespawn>>,
 ) {
     for (entity, mut notification) in notifications.iter_mut() {
         notification.timer.tick(time.delta());
         
         if notification.timer.finished() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
 }
@@ -372,14 +372,14 @@ pub fn achievement_menu_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     achievement_manager: Res<AchievementManager>,
-    existing_ui: Query<Entity, With<AchievementUI>>,
+    existing_ui: Query<Entity, (With<AchievementUI>,Without<MarkedForDespawn>)>,
 ) {
     if keyboard.just_pressed(KeyCode::KeyA) {
         if existing_ui.is_empty() {
             show_achievement_menu(&mut commands, &achievement_manager);
         } else {
             for entity in existing_ui.iter() {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).insert(MarkedForDespawn);
             }
         }
     }

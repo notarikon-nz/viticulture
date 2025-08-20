@@ -190,7 +190,7 @@ pub fn animate_card_play(
 pub fn card_animation_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut animated_cards: Query<(Entity, &mut Transform, &mut CardAnimation, &mut Sprite)>,
+    mut animated_cards: Query<(Entity, &mut Transform, &mut CardAnimation, &mut Sprite),Without<MarkedForDespawn>>,
 ) {
     for (entity, mut transform, mut animation, mut sprite) in animated_cards.iter_mut() {
         animation.timer.tick(time.delta());
@@ -219,7 +219,7 @@ pub fn card_animation_system(
         }
         
         if animation.timer.finished() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
 }
@@ -285,8 +285,8 @@ pub fn trigger_season_transition(
 pub fn season_transition_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut transitions: Query<(Entity, &mut SeasonTransition, &mut BackgroundColor), With<Node>>,
-    mut text_transitions: Query<(Entity, &mut SeasonTransition, &mut Text), (With<Text>, Without<Node>)>,
+    mut transitions: Query<(Entity, &mut SeasonTransition, &mut BackgroundColor), (With<Node>,Without<MarkedForDespawn>)>,
+    mut text_transitions: Query<(Entity, &mut SeasonTransition, &mut Text), (With<Text>, Without<Node>, Without<MarkedForDespawn>)>,
 ) {
     // Handle background transitions
     for (entity, mut transition, mut bg_color) in transitions.iter_mut() {
@@ -300,7 +300,7 @@ pub fn season_transition_system(
         bg_color.0 = Color::from(color);
         
         if transition.timer.finished() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
     
@@ -325,7 +325,7 @@ pub fn season_transition_system(
         }
         
         if transition.timer.finished() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
 }
@@ -399,7 +399,7 @@ pub fn spawn_lira_particles(
 pub fn particle_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut particle_effects: Query<(Entity, &mut ParticleEffect, &Transform)>,
+    mut particle_effects: Query<(Entity, &mut ParticleEffect, &Transform),Without<MarkedForDespawn>>,
     mut gizmos: Gizmos,
 ) {
     for (entity, mut effect, transform) in particle_effects.iter_mut() {
@@ -445,7 +445,7 @@ pub fn particle_system(
         
         // Clean up finished effects
         if effect.timer.finished() || effect.particles.is_empty() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
 }
@@ -626,7 +626,7 @@ pub fn spawn_animated_text(commands: &mut Commands, player_id: PlayerId, text: &
 pub fn animate_text_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut animated_texts: Query<(Entity, &mut Transform, &mut AnimatedText, &mut Text)>,
+    mut animated_texts: Query<(Entity, &mut Transform, &mut AnimatedText, &mut Text),Without<MarkedForDespawn>>,
 ) {
     for (entity, mut transform, mut animated_text, mut text) in animated_texts.iter_mut() {
         animated_text.timer.tick(time.delta());
@@ -647,7 +647,7 @@ pub fn animate_text_system(
         }
         
         if animated_text.timer.finished() {
-            commands.entity(entity).despawn();
+            commands.entity(entity).insert(MarkedForDespawn);
         }
     }
 }

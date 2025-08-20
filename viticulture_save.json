@@ -1,0 +1,185 @@
+{
+  "players": [
+    {
+      "id": 0,
+      "name": "Player 1",
+      "victory_points": 0,
+      "lira": 3,
+      "workers": 2,
+      "grande_worker_available": true
+    },
+    {
+      "id": 1,
+      "name": "Player 2",
+      "victory_points": 0,
+      "lira": 3,
+      "workers": 2,
+      "grande_worker_available": true
+    }
+  ],
+  "vineyards": [
+    {
+      "owner_id": 0,
+      "fields": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "red_grapes": 0,
+      "white_grapes": 0,
+      "red_wine": 0,
+      "white_wine": 0,
+      "lira": 3
+    },
+    {
+      "owner_id": 1,
+      "fields": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "red_grapes": 0,
+      "white_grapes": 0,
+      "red_wine": 0,
+      "white_wine": 0,
+      "lira": 3
+    }
+  ],
+  "hands": [
+    {
+      "owner_id": 0,
+      "vine_cards": [],
+      "wine_order_cards": []
+    },
+    {
+      "owner_id": 1,
+      "vine_cards": [],
+      "wine_order_cards": []
+    }
+  ],
+  "workers": [
+    {
+      "owner_id": 0,
+      "is_grande": false,
+      "placed_at": 4,
+      "position_x": -300.0,
+      "position_y": -100.0
+    },
+    {
+      "owner_id": 0,
+      "is_grande": false,
+      "placed_at": 1,
+      "position_x": -300.0,
+      "position_y": 50.0
+    },
+    {
+      "owner_id": 0,
+      "is_grande": true,
+      "placed_at": 1,
+      "position_x": -300.0,
+      "position_y": 50.0
+    },
+    {
+      "owner_id": 1,
+      "is_grande": false,
+      "placed_at": null,
+      "position_x": -400.0,
+      "position_y": -200.0
+    },
+    {
+      "owner_id": 1,
+      "is_grande": false,
+      "placed_at": null,
+      "position_x": -400.0,
+      "position_y": -170.0
+    },
+    {
+      "owner_id": 1,
+      "is_grande": true,
+      "placed_at": null,
+      "position_x": -400.0,
+      "position_y": -170.0
+    }
+  ],
+  "turn_order": {
+    "players": [
+      0,
+      1,
+      0,
+      1
+    ],
+    "current_player": 0,
+    "wake_up_order": []
+  },
+  "config": {
+    "player_count": 2,
+    "target_victory_points": 20,
+    "current_year": 1,
+    "max_years": 7
+  },
+  "current_state": 3,
+  "action_spaces": [
+    {
+      "action": 0,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 1,
+      "occupied_by": 0,
+      "bonus_worker_slot": 0
+    },
+    {
+      "action": 2,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 3,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 4,
+      "occupied_by": 0,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 5,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 6,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 7,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 8,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    },
+    {
+      "action": 9,
+      "occupied_by": null,
+      "bonus_worker_slot": null
+    }
+  ]
+}

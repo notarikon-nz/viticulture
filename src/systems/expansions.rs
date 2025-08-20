@@ -196,7 +196,7 @@ pub enum ExtendedActionSpace {
 pub fn setup_tuscany_expansion_system(
     mut commands: Commands,
     expansion_settings: Res<ExpansionSettings>,
-    existing_visitors: Query<Entity, With<VisitorCard>>,
+    existing_visitors: Query<Entity, (With<VisitorCard>,Without<MarkedForDespawn>)>,
 ) {
     if !expansion_settings.tuscany_enabled {
         return;
@@ -204,7 +204,7 @@ pub fn setup_tuscany_expansion_system(
     
     // Clean up existing visitor cards
     for entity in existing_visitors.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).insert(MarkedForDespawn);
     }
     
     // Initialize visitor deck
@@ -330,7 +330,7 @@ pub fn setup_advanced_vineyards_system(
     mut commands: Commands,
     expansion_settings: Res<ExpansionSettings>,
     players: Query<&Player>,
-    existing_advanced: Query<Entity, With<AdvancedVineyard>>,
+    existing_advanced: Query<Entity, (With<AdvancedVineyard>,Without<MarkedForDespawn>)>,
 ) {
     if !expansion_settings.advanced_boards_enabled {
         return;
@@ -338,7 +338,7 @@ pub fn setup_advanced_vineyards_system(
     
     // Clean up existing advanced vineyards
     for entity in existing_advanced.iter() {
-        commands.entity(entity).despawn();
+        commands.entity(entity).insert(MarkedForDespawn);
     }
     
     // Create advanced vineyard for each player
