@@ -56,7 +56,7 @@ fn main() {
         .add_systems(
             Update, (
                 main_menu_system.run_if(in_state(GameState::MainMenu)),
-                (setup_game_system, cleanup_entities_system, setup_ai_players).run_if(in_state(GameState::Setup)),
+                (setup_game_system, setup_ai_players).run_if(in_state(GameState::Setup)),
                 (spring_system, start_background_music).run_if(in_state(GameState::Spring)),
                 mouse_input_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 worker_placement_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
@@ -118,8 +118,11 @@ fn main() {
                 fast_test_mode_system,
                 game_length_tracking_system,
                 performance_monitor_system,
-                despawn_marked_entities,
-            ),
+                
+            ))
+        .add_systems(PostUpdate, (
+            despawn_marked_entities,
+        ),
         )
         .run();
 }

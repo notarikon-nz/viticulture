@@ -17,10 +17,11 @@ pub fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 pub fn cleanup_entities_system(
     mut commands: Commands,
-    entities: Query<Entity, (Without<Camera>, Without<Window>)>,
+    entities: Query<Entity, (Without<Camera>, Without<Window>, Without<MarkedForDespawn>)>,
 ) {
     for entity in entities.iter() {
-        commands.entity(entity).despawn();
+        // commands.entity(entity).despawn();
+        commands.entity(entity).insert(MarkedForDespawn);
     }
 }
 
