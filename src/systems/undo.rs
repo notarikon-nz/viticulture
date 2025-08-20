@@ -1,3 +1,7 @@
+// =============================================================================
+// REPLACE IN: src/systems/undo.rs - Fix all the undo system structures
+// =============================================================================
+
 use bevy::prelude::*;
 use crate::components::*;
 
@@ -32,9 +36,11 @@ pub struct GameSnapshot {
 #[derive(Clone)]
 pub struct PlayerSnapshot {
     pub id: u8,
+    pub name: String,
     pub victory_points: u8,
     pub lira: u8,
     pub workers: u8,
+    pub is_ai: bool, // ADDED: Missing field
 }
 
 #[derive(Clone)]
@@ -45,7 +51,15 @@ pub struct VineyardSnapshot {
     pub red_wine: u8,
     pub white_wine: u8,
     pub lira: u8,
-    pub fields: [Option<(bool, u8)>; 9], // (is_red, value)
+    pub fields: [VineyardFieldSnapshot; 9], // FIXED: Use VineyardFieldSnapshot instead of Option<(bool, u8)>
+}
+
+// NEW: Snapshot structure for VineyardField
+#[derive(Clone, Copy)]
+pub struct VineyardFieldSnapshot {
+    pub vine: Option<(bool, u8)>, // (is_red, value)
+    pub field_type: u8, // FieldType as u8
+    pub sold_this_year: bool,
 }
 
 #[derive(Clone)]
@@ -152,9 +166,11 @@ fn create_game_snapshot(
 ) -> GameSnapshot {
     let players_snapshot: Vec<_> = players.iter().map(|p| PlayerSnapshot {
         id: p.id.0,
+        name: p.name.clone(),
         victory_points: p.victory_points,
         lira: p.lira,
         workers: p.workers,
+        is_ai: p.is_ai, // ADDED: Missing field
     }).collect();
     
     let vineyards_snapshot: Vec<_> = vineyards.iter().map(|v| VineyardSnapshot {
@@ -164,10 +180,15 @@ fn create_game_snapshot(
         red_wine: v.red_wine,
         white_wine: v.white_wine,
         lira: v.lira,
-        fields: v.fields.map(|f| f.map(|vt| match vt {
-            VineType::Red(val) => (true, val),
-            VineType::White(val) => (false, val),
-        })),
+        // FIXED: Convert VineyardField array to VineyardFieldSnapshot array
+        fields: v.fields.map(|field| VineyardFieldSnapshot {
+            vine: field.vine.map(|vt| match vt {
+                VineType::Red(val) => (true, val),
+                VineType::White(val) => (false, val),
+            }),
+            field_type: field_type_to_u8(field.field_type),
+            sold_this_year: field.sold_this_year,
+        }),
     }).collect();
     
     let hands_snapshot: Vec<_> = hands.iter().map(|h| HandSnapshot {
@@ -214,25 +235,34 @@ fn restore_from_snapshot(
     for player_snap in &snapshot.players {
         commands.spawn(Player {
             id: PlayerId(player_snap.id),
-            name: format!("Player {}", player_snap.id + 1),
+            name: player_snap.name.clone(),
             victory_points: player_snap.victory_points,
             lira: player_snap.lira,
             workers: player_snap.workers,
             grande_worker_available: true,
+            is_ai: player_snap.is_ai, // ADDED: Missing field
         });
     }
     
     // Restore vineyards
     for vineyard_snap in &snapshot.vineyards {
-        commands.spawn(Vineyard {
-            owner: PlayerId(vineyard_snap.owner_id),
-            fields: vineyard_snap.fields.map(|f| f.map(|(is_red, val)| {
+        // FIXED: Convert VineyardFieldSnapshot array back to VineyardField array
+        // Now works because VineyardFieldSnapshot implements Copy
+        let fields = vineyard_snap.fields.map(|field_snap| VineyardField {
+            vine: field_snap.vine.map(|(is_red, val)| {
                 if is_red {
                     VineType::Red(val)
                 } else {
                     VineType::White(val)
                 }
-            })),
+            }),
+            field_type: u8_to_field_type(field_snap.field_type),
+            sold_this_year: field_snap.sold_this_year,
+        });
+        
+        commands.spawn(Vineyard {
+            owner: PlayerId(vineyard_snap.owner_id),
+            fields,
             red_grapes: vineyard_snap.red_grapes,
             white_grapes: vineyard_snap.white_grapes,
             red_wine: vineyard_snap.red_wine,
@@ -297,7 +327,7 @@ pub fn display_undo_status_system(
                 "Press Ctrl+Z to undo last action",
                 TextStyle {
                     font_size: 14.0,
-                    color: Color::from(Srgba::new(1.0, 1.0, 0.0, 0.8)),
+                    color: Color::srgb(1.0, 1.0, 0.0).with_alpha(0.8),
                     ..default()
                 },
             ).with_style(Style {
@@ -313,6 +343,23 @@ pub fn display_undo_status_system(
 
 #[derive(Component)]
 pub struct UndoStatusText;
+
+// Helper conversion functions (same as in save.rs)
+fn field_type_to_u8(field_type: FieldType) -> u8 {
+    match field_type {
+        FieldType::Standard => 0,
+        FieldType::Premium => 1,
+        FieldType::Poor => 2,
+    }
+}
+
+fn u8_to_field_type(value: u8) -> FieldType {
+    match value {
+        1 => FieldType::Premium,
+        2 => FieldType::Poor,
+        _ => FieldType::Standard,
+    }
+}
 
 fn action_to_u8(action: ActionSpace) -> u8 {
     match action {

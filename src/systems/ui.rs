@@ -8,13 +8,14 @@ pub fn main_menu_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut commands: Commands,
+    mut config: ResMut<GameConfig>,
     text_query: Query<Entity, With<Text>>,
 ) {
     if text_query.is_empty() {
         commands.spawn(TextBundle::from_section(
-            "VITICULTURE\n\nPress SPACE to Start Game",
+            "VITICULTURE - Enhanced Edition\n\nPress SPACE to Start Game\nPress 1-4 to set player count\nPress A to cycle AI count\nPress C to view player cards in-game",
             TextStyle {
-                font_size: 40.0,
+                font_size: 28.0,
                 color: Color::WHITE,
                 ..default()
             },
@@ -24,6 +25,46 @@ pub fn main_menu_system(
             left: Val::Px(50.0),
             ..default()
         }));
+        
+        commands.spawn(TextBundle::from_section(
+            format!("Current Setup: {} players ({} AI)\n\nFeatures:\n• Mama & Papa starting cards\n• Enhanced vineyard fields\n• Improved card art\n• Better balance for 3-4 players", 
+                   config.player_count, config.ai_count),
+            TextStyle {
+                font_size: 18.0,
+                color: Color::srgb(0.8, 0.8, 0.8),
+                ..default()
+            },
+        ).with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(380.0),
+            left: Val::Px(50.0),
+            ..default()
+        }));
+    }
+    
+    // Player count selection
+    if keyboard.just_pressed(KeyCode::Digit1) {
+        config.player_count = 1;
+        config.ai_count = config.ai_count.min(0);
+        clear_menu_text(&mut commands, &text_query);
+    } else if keyboard.just_pressed(KeyCode::Digit2) {
+        config.player_count = 2;
+        config.ai_count = config.ai_count.min(1);
+        clear_menu_text(&mut commands, &text_query);
+    } else if keyboard.just_pressed(KeyCode::Digit3) {
+        config.player_count = 3;
+        config.ai_count = config.ai_count.min(2);
+        clear_menu_text(&mut commands, &text_query);
+    } else if keyboard.just_pressed(KeyCode::Digit4) {
+        config.player_count = 4;
+        config.ai_count = config.ai_count.min(3);
+        clear_menu_text(&mut commands, &text_query);
+    }
+    
+    // AI count adjustment
+    if keyboard.just_pressed(KeyCode::KeyA) {
+        config.ai_count = (config.ai_count + 1) % (config.player_count + 1);
+        clear_menu_text(&mut commands, &text_query);
     }
     
     if keyboard.just_pressed(KeyCode::Space) {
@@ -31,6 +72,12 @@ pub fn main_menu_system(
             commands.entity(entity).despawn();
         }
         next_state.set(GameState::Setup);
+    }
+}
+
+fn clear_menu_text(commands: &mut Commands, text_query: &Query<Entity, With<Text>>) {
+    for entity in text_query.iter() {
+        commands.entity(entity).despawn();
     }
 }
 
@@ -368,5 +415,105 @@ pub fn ui_game_over_system(
             commands.entity(entity).despawn_recursive();
         }
         next_state.set(GameState::MainMenu);
+    }
+}
+
+// Display player cards UI (Mama & Papa cards info)
+pub fn display_player_cards_system(
+    mut commands: Commands,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mama_cards: Query<&MamaCard>,
+    papa_cards: Query<&PapaCard>,
+    players: Query<&Player>,
+    existing_ui: Query<Entity, With<PlayerCardsUI>>,
+) {
+    if keyboard.just_pressed(KeyCode::KeyC) {
+        if existing_ui.is_empty() {
+            // Show player cards info panel
+            let mut card_text = "🎴 PLAYER CARDS (Press C to close)\n\n".to_string();
+            
+            for player in players.iter() {
+                card_text.push_str(&format!("🎯 Player {}: {}\n", player.id.0 + 1, player.name));
+                
+                // Show Mama card info
+                if let Some(mama) = mama_cards.iter().find(|m| m.id == player.id.0) {
+                    card_text.push_str(&format!("👵 Mama: {}\n", mama.name));
+                    card_text.push_str(&format!("   Bonuses: +{} lira, +{} workers, +{} vine cards\n", 
+                        mama.bonus_lira, mama.bonus_workers, mama.bonus_vine_cards));
+                    
+                    if let Some(ability) = &mama.special_ability {
+                        let ability_desc = match ability {
+                            MamaAbility::ExtraBonusAction => "Can take extra action per year",
+                            MamaAbility::DiscountedStructures => "All structures cost 1 less lira",
+                            MamaAbility::BonusHarvest => "+1 grape when harvesting",
+                            MamaAbility::FreeVinePlanting => "Plant first vine each year for free",
+                        };
+                        card_text.push_str(&format!("   Special: {}\n", ability_desc));
+                    }
+                }
+                
+                // Show Papa card info
+                if let Some(papa) = papa_cards.iter().find(|p| p.id == player.id.0) {
+                    card_text.push_str(&format!("👴 Papa: {}\n", papa.name));
+                    card_text.push_str(&format!("   Bonuses: +{} VP", papa.bonus_vp));
+                    
+                    if !papa.starting_structures.is_empty() {
+                        let structures_text = papa.starting_structures.iter()
+                            .map(|s| format!("{:?}", s))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        card_text.push_str(&format!(", structures: {}", structures_text));
+                    }
+                    
+                    if papa.bonus_fields > 0 {
+                        card_text.push_str(&format!(", +{} fields", papa.bonus_fields));
+                    }
+                    card_text.push_str("\n");
+                    
+                    if let Some(ability) = &papa.special_ability {
+                        let ability_desc = match ability {
+                            PapaAbility::ExtraVineyardField => "Start with extra vineyard field",
+                            PapaAbility::AdvancedCellar => "Can store extra wine",
+                            PapaAbility::TradingConnections => "Better wine order prices",
+                            PapaAbility::WineExpertise => "Make blush wine more efficiently",
+                        };
+                        card_text.push_str(&format!("   Special: {}\n", ability_desc));
+                    }
+                }
+                card_text.push_str("\n");
+            }
+            
+            // Spawn the UI panel
+            commands.spawn((
+                NodeBundle {
+                    style: Style {
+                        position_type: PositionType::Absolute,
+                        top: Val::Px(50.0),
+                        left: Val::Px(20.0),
+                        width: Val::Px(450.0),
+                        padding: UiRect::all(Val::Px(20.0)),
+                        ..default()
+                    },
+                    background_color: Color::srgb(0.1, 0.1, 0.1).with_alpha(0.95).into(),
+                    z_index: ZIndex::Global(800),
+                    ..default()
+                },
+                PlayerCardsUI,
+            )).with_children(|parent| {
+                parent.spawn(TextBundle::from_section(
+                    card_text,
+                    TextStyle {
+                        font_size: 14.0,
+                        color: Color::WHITE,
+                        ..default()
+                    },
+                ));
+            });
+        } else {
+            // Hide player cards panel
+            for entity in existing_ui.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
+        }
     }
 }

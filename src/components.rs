@@ -1,3 +1,5 @@
+// src/components.rs - Updated with fixes and improvements
+
 use bevy::prelude::*;
 
 #[derive(States, Debug, Clone, Eq, PartialEq, Hash, Default)]
@@ -16,7 +18,7 @@ pub enum GameState {
 pub struct TurnOrder {
     pub players: Vec<PlayerId>,
     pub current_player: usize,
-    pub wake_up_order: Vec<(PlayerId, u8)>, // (player_id, wake_up_time)
+    pub wake_up_order: Vec<(PlayerId, u8)>,
     pub wake_up_bonuses: Vec<WakeUpBonus>,
 }
 
@@ -31,7 +33,7 @@ pub enum WakeUpBonus {
 
 impl TurnOrder {
     pub fn set_wake_up_order(&mut self, mut order: Vec<(PlayerId, u8)>) {
-        order.sort_by(|a, b| a.1.cmp(&b.1)); // Sort by wake-up time
+        order.sort_by(|a, b| a.1.cmp(&b.1));
         self.wake_up_order = order;
         self.players.clear();
         for (player_id, _) in &self.wake_up_order {
@@ -44,7 +46,7 @@ impl TurnOrder {
             match position {
                 0 => Some(WakeUpBonus::DrawVineCard),
                 1 => Some(WakeUpBonus::GainLira(1)),
-                2 => None, // No bonus
+                2 => None,
                 3 => Some(WakeUpBonus::GainLira(1)),
                 4 => Some(WakeUpBonus::DrawWineOrderCard),
                 _ => Some(WakeUpBonus::GainVictoryPoint),
@@ -61,6 +63,7 @@ pub struct GameConfig {
     pub target_victory_points: u8,
     pub current_year: u8,
     pub max_years: u8,
+    pub ai_count: u8, // New: track AI players separately
 }
 
 impl Default for GameConfig {
@@ -69,7 +72,8 @@ impl Default for GameConfig {
             player_count: 2,
             target_victory_points: 20,
             current_year: 1,
-            max_years: 7, // Game ends after 7 years if no one reaches 20 VP
+            max_years: 7,
+            ai_count: 1, // Default to 1 AI opponent
         }
     }
 }
@@ -85,17 +89,19 @@ pub struct Player {
     pub lira: u8,
     pub workers: u8,
     pub grande_worker_available: bool,
+    pub is_ai: bool, // New: track if player is AI
 }
 
 impl Player {
-    pub fn new(id: u8, name: String) -> Self {
+    pub fn new(id: u8, name: String, is_ai: bool) -> Self {
         Self {
             id: PlayerId(id),
             name,
             victory_points: 0,
-            lira: 3, // Starting lira
-            workers: 2,
+            lira: 3,
+            workers: 2, // Base workers (not counting grande)
             grande_worker_available: true,
+            is_ai,
         }
     }
     
@@ -106,12 +112,18 @@ impl Player {
     pub fn gain_lira(&mut self, amount: u8) {
         self.lira = self.lira.saturating_add(amount);
     }
+    
+    // New: get total worker count (including grande)
+    pub fn total_workers(&self) -> u8 {
+        self.workers + if self.grande_worker_available { 1 } else { 0 }
+    }
 }
 
+// Enhanced vineyard with better field representation
 #[derive(Component)]
 pub struct Vineyard {
     pub owner: PlayerId,
-    pub fields: [Option<VineType>; 9], // 3x3 grid, simplified for now
+    pub fields: [VineyardField; 9],
     pub red_grapes: u8,
     pub white_grapes: u8,
     pub red_wine: u8,
@@ -119,27 +131,83 @@ pub struct Vineyard {
     pub lira: u8,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct VineyardField {
+    pub vine: Option<VineType>,
+    pub field_type: FieldType,
+    pub sold_this_year: bool, // Track if sold grapes this year
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FieldType {
+    Standard,
+    Premium, // +1 bonus to vine value
+    Poor,    // -1 to vine value (minimum 1)
+}
+
+impl VineyardField {
+    pub fn new(field_type: FieldType) -> Self {
+        Self {
+            vine: None,
+            field_type,
+            sold_this_year: false,
+        }
+    }
+    
+    pub fn get_harvest_value(&self) -> u8 {
+        if let Some(vine) = self.vine {
+            let base_value = match vine {
+                VineType::Red(v) | VineType::White(v) => v,
+            };
+            
+            match self.field_type {
+                FieldType::Premium => base_value + 1,
+                FieldType::Poor => base_value.saturating_sub(1).max(1),
+                FieldType::Standard => base_value,
+            }
+        } else {
+            0
+        }
+    }
+    
+    // Helper methods for easier checking
+    pub fn is_empty(&self) -> bool {
+        self.vine.is_none()
+    }
+    
+    pub fn has_vine(&self) -> bool {
+        self.vine.is_some()
+    }
+    
+    pub fn plant_vine(&mut self, vine_type: VineType) {
+        self.vine = Some(vine_type);
+    }
+}
+
 impl Vineyard {
     pub fn new(owner: PlayerId) -> Self {
+        // Create varied field types for more interesting gameplay
+        let mut fields = [VineyardField::new(FieldType::Standard); 9];
+        fields[1] = VineyardField::new(FieldType::Premium); // One premium field
+        fields[7] = VineyardField::new(FieldType::Poor);    // One poor field
+        
         Self {
             owner,
-            fields: [None; 9],
+            fields,
             red_grapes: 0,
             white_grapes: 0,
             red_wine: 0,
             white_wine: 0,
-            lira: 3, // Starting lira
+            lira: 3,
         }
     }
     
     pub fn can_plant_vine(&self, field_index: usize, vine_card: &VineCard, structures: &[Structure]) -> bool {
-        if field_index >= 9 || self.fields[field_index].is_some() {
+        if field_index >= 9 || self.fields[field_index].vine.is_some() {
             return false;
         }
         
         let mut cost = vine_card.cost;
-        
-        // Check for Irrigation structure (reduces vine cost by 1)
         if structures.iter().any(|s| matches!(s.structure_type, StructureType::Irrigation) && s.owner == self.owner) {
             cost = cost.saturating_sub(1);
         }
@@ -150,13 +218,11 @@ impl Vineyard {
     pub fn plant_vine(&mut self, field_index: usize, vine_card: VineCard, structures: &[Structure]) -> bool {
         if self.can_plant_vine(field_index, &vine_card, structures) {
             let mut cost = vine_card.cost;
-            
-            // Apply Irrigation discount
             if structures.iter().any(|s| matches!(s.structure_type, StructureType::Irrigation) && s.owner == self.owner) {
                 cost = cost.saturating_sub(1);
             }
             
-            self.fields[field_index] = Some(vine_card.vine_type);
+            self.fields[field_index].vine = Some(vine_card.vine_type);
             self.lira = self.lira.saturating_sub(cost);
             true
         } else {
@@ -167,32 +233,32 @@ impl Vineyard {
     pub fn harvest_grapes(&mut self, structures: &[Structure]) -> u8 {
         let mut total_gained = 0;
         
-        for field in &self.fields {
-            if let Some(vine_type) = field {
-                let mut value = match vine_type {
-                    VineType::Red(v) => *v,
-                    VineType::White(v) => *v,
-                };
+        for field in &mut self.fields {
+            let harvest_value = field.get_harvest_value();
+            if harvest_value > 0 {
+                let mut final_value = harvest_value;
                 
-                // Check for Trellis structure (+1 vine value)
+                // Trellis structure bonus
                 if structures.iter().any(|s| matches!(s.structure_type, StructureType::Trellis) && s.owner == self.owner) {
-                    value += 1;
+                    final_value += 1;
                 }
                 
-                match vine_type {
-                    VineType::Red(_) => {
-                        self.red_grapes += value;
-                        total_gained += value;
-                    },
-                    VineType::White(_) => {
-                        self.white_grapes += value;
-                        total_gained += value;
-                    },
+                if let Some(vine) = field.vine {
+                    match vine {
+                        VineType::Red(_) => {
+                            self.red_grapes += final_value;
+                            total_gained += final_value;
+                        },
+                        VineType::White(_) => {
+                            self.white_grapes += final_value;
+                            total_gained += final_value;
+                        },
+                    }
                 }
             }
         }
         
-        // Check for Yoke structure (+1 lira when harvesting)
+        // Yoke structure bonus
         if structures.iter().any(|s| matches!(s.structure_type, StructureType::Yoke) && s.owner == self.owner) {
             if total_gained > 0 {
                 self.lira += 1;
@@ -261,7 +327,6 @@ impl Vineyard {
     pub fn get_end_game_bonus(&self, structures: &[Structure]) -> u8 {
         let mut bonus = 0;
         
-        // Windmill: +1 VP for every 7 lira
         if structures.iter().any(|s| matches!(s.structure_type, StructureType::Windmill) && s.owner == self.owner) {
             bonus += self.lira / 7;
         }
@@ -272,8 +337,126 @@ impl Vineyard {
 
 #[derive(Clone, Copy, Debug)]
 pub enum VineType {
-    Red(u8),   // harvest value
-    White(u8), // harvest value
+    Red(u8),
+    White(u8),
+}
+
+// Enhanced card representation with better art data
+#[derive(Component, Clone)]
+pub struct VineCard {
+    pub id: u32,
+    pub vine_type: VineType,
+    pub cost: u8,
+    pub art_style: CardArt,
+    pub special_ability: Option<VineAbility>, // New: special vine abilities
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum VineAbility {
+    EarlyHarvest,    // Can harvest in summer
+    DiseaseResistant, // Immune to negative events
+    HighYield,       // +1 grape when harvesting
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CardArt {
+    BasicRed,
+    BasicWhite,
+    PremiumRed,
+    PremiumWhite,
+    SpecialtyRed,
+    SpecialtyWhite,
+}
+
+impl CardArt {
+    pub fn get_color(&self) -> Color {
+        match self {
+            CardArt::BasicRed => Color::srgb(0.6, 0.2, 0.2),
+            CardArt::BasicWhite => Color::srgb(0.9, 0.9, 0.7),
+            CardArt::PremiumRed => Color::srgb(0.8, 0.1, 0.1),
+            CardArt::PremiumWhite => Color::srgb(1.0, 1.0, 0.8),
+            CardArt::SpecialtyRed => Color::srgb(0.9, 0.3, 0.1),
+            CardArt::SpecialtyWhite => Color::srgb(0.95, 0.95, 0.9),
+        }
+    }
+    
+    pub fn get_border_color(&self) -> Color {
+        match self {
+            CardArt::BasicRed | CardArt::PremiumRed | CardArt::SpecialtyRed => Color::srgb(0.3, 0.1, 0.1),
+            CardArt::BasicWhite | CardArt::PremiumWhite | CardArt::SpecialtyWhite => Color::srgb(0.7, 0.7, 0.5),
+        }
+    }
+}
+
+#[derive(Component, Clone)]
+pub struct WineOrderCard {
+    pub id: u32,
+    pub red_wine_needed: u8,
+    pub white_wine_needed: u8,
+    pub victory_points: u8,
+    pub payout: u8,
+    pub art_style: OrderArt,
+    pub order_type: OrderType, // New: different order types
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum OrderType {
+    Regular,
+    Premium,  // Higher VP, harder requirements
+    Seasonal, // Special seasonal bonuses
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum OrderArt {
+    BasicOrder,
+    PremiumOrder,
+    SeasonalOrder,
+}
+
+impl OrderArt {
+    pub fn get_color(&self) -> Color {
+        match self {
+            OrderArt::BasicOrder => Color::srgb(0.4, 0.2, 0.6),
+            OrderArt::PremiumOrder => Color::srgb(0.6, 0.3, 0.8),
+            OrderArt::SeasonalOrder => Color::srgb(0.8, 0.5, 0.2),
+        }
+    }
+    
+    pub fn get_border_color(&self) -> Color {
+        match self {
+            OrderArt::BasicOrder => Color::srgb(0.2, 0.1, 0.3),
+            OrderArt::PremiumOrder => Color::srgb(0.3, 0.15, 0.4),
+            OrderArt::SeasonalOrder => Color::srgb(0.4, 0.25, 0.1),
+        }
+    }
+}
+
+impl WineOrderCard {
+    pub fn new(id: u32, red: u8, white: u8, vp: u8, payout: u8) -> Self {
+        let art_style = if vp >= 5 {
+            OrderArt::PremiumOrder
+        } else if id % 4 == 0 {
+            OrderArt::SeasonalOrder
+        } else {
+            OrderArt::BasicOrder
+        };
+        
+        let order_type = match vp {
+            0..=2 => OrderType::Regular,
+            3..=5 => OrderType::Premium,
+            _ => OrderType::Seasonal,
+        };
+        
+        Self {
+            id,
+            red_wine_needed: red,
+            white_wine_needed: white,
+            victory_points: vp,
+            payout,
+            art_style,
+            order_type,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -324,6 +507,7 @@ pub struct ActionSpaceSlot {
     pub bonus_worker_slot: Option<PlayerId>,
     pub position: Vec2,
     pub is_summer: bool,
+    pub has_bonus_slot: bool, // New: some spaces have bonus slots
 }
 
 #[derive(Component)]
@@ -332,23 +516,22 @@ pub struct Clickable {
 }
 
 impl ActionSpaceSlot {
-    pub fn new(action: ActionSpace, position: Vec2, is_summer: bool) -> Self {
+    pub fn new(action: ActionSpace, position: Vec2, is_summer: bool, has_bonus_slot: bool) -> Self {
         Self {
             action,
             occupied_by: None,
             bonus_worker_slot: None,
             position,
             is_summer,
+            has_bonus_slot,
         }
     }
     
-    pub fn can_place_worker(&self, player_id: PlayerId, current_state: &GameState) -> bool {
-        // Check if space is occupied
+    pub fn can_place_worker(&self, _player_id: PlayerId, current_state: &GameState) -> bool {
         if self.occupied_by.is_some() {
             return false;
         }
         
-        // Check if it's the right season
         match current_state {
             GameState::Summer => self.is_summer,
             GameState::Winter => !self.is_summer,
@@ -356,13 +539,14 @@ impl ActionSpaceSlot {
         }
     }
     
-    pub fn can_place_grande_worker(&self, player_id: PlayerId, current_state: &GameState) -> bool {
-        // Grande worker can go anywhere that's the right season, even if occupied
-        match current_state {
+    pub fn can_place_grande_worker(&self, _player_id: PlayerId, current_state: &GameState) -> bool {
+        let right_season = match current_state {
             GameState::Summer => self.is_summer,
             GameState::Winter => !self.is_summer,
             _ => false,
-        }
+        };
+        
+        right_season && (self.occupied_by.is_none() || (self.has_bonus_slot && self.bonus_worker_slot.is_none()))
     }
 }
 
@@ -370,51 +554,67 @@ impl ActionBoard {
     pub fn new() -> Self {
         let mut spaces = Vec::new();
         
-        // Summer actions (left side)
-        spaces.push(ActionSpaceSlot::new(ActionSpace::DrawVine, Vec2::new(-300.0, 100.0), true));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::PlantVine, Vec2::new(-300.0, 50.0), true));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::BuildStructure, Vec2::new(-300.0, 0.0), true));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::GiveTour, Vec2::new(-300.0, -50.0), true));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::SellGrapes, Vec2::new(-300.0, -100.0), true));
+        // Summer actions (left side) - some with bonus slots
+        spaces.push(ActionSpaceSlot::new(ActionSpace::DrawVine, Vec2::new(-300.0, 100.0), true, false));
+        spaces.push(ActionSpaceSlot::new(ActionSpace::PlantVine, Vec2::new(-300.0, 50.0), true, true)); // Has bonus
+        spaces.push(ActionSpaceSlot::new(ActionSpace::BuildStructure, Vec2::new(-300.0, 0.0), true, false));
+        spaces.push(ActionSpaceSlot::new(ActionSpace::GiveTour, Vec2::new(-300.0, -50.0), true, true)); // Has bonus
+        spaces.push(ActionSpaceSlot::new(ActionSpace::SellGrapes, Vec2::new(-300.0, -100.0), true, false));
         
-        // Winter actions (right side)
-        spaces.push(ActionSpaceSlot::new(ActionSpace::DrawWineOrder, Vec2::new(300.0, 100.0), false));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::Harvest, Vec2::new(300.0, 50.0), false));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::MakeWine, Vec2::new(300.0, 0.0), false));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::FillOrder, Vec2::new(300.0, -50.0), false));
-        spaces.push(ActionSpaceSlot::new(ActionSpace::TrainWorker, Vec2::new(300.0, -100.0), false));
+        // Winter actions (right side) - some with bonus slots
+        spaces.push(ActionSpaceSlot::new(ActionSpace::DrawWineOrder, Vec2::new(300.0, 100.0), false, false));
+        spaces.push(ActionSpaceSlot::new(ActionSpace::Harvest, Vec2::new(300.0, 50.0), false, true)); // Has bonus
+        spaces.push(ActionSpaceSlot::new(ActionSpace::MakeWine, Vec2::new(300.0, 0.0), false, true)); // Has bonus
+        spaces.push(ActionSpaceSlot::new(ActionSpace::FillOrder, Vec2::new(300.0, -50.0), false, false));
+        spaces.push(ActionSpaceSlot::new(ActionSpace::TrainWorker, Vec2::new(300.0, -100.0), false, false));
         
         Self { spaces }
     }
 }
 
-// Simple card representation for now
+// Mama & Papa Cards - Essential for game variety
 #[derive(Component, Clone)]
-pub struct VineCard {
-    pub id: u32,
-    pub vine_type: VineType,
-    pub cost: u8,
+pub struct MamaCard {
+    pub id: u8,
+    pub name: String,
+    pub bonus_lira: u8,
+    pub bonus_workers: u8,
+    pub bonus_vine_cards: u8,
+    pub special_ability: Option<MamaAbility>,
 }
 
 #[derive(Component, Clone)]
-pub struct WineOrderCard {
-    pub id: u32,
-    pub red_wine_needed: u8,
-    pub white_wine_needed: u8,
-    pub victory_points: u8,
-    pub payout: u8,
+pub struct PapaCard {
+    pub id: u8,
+    pub name: String,
+    pub bonus_vp: u8,
+    pub starting_structures: Vec<StructureType>,
+    pub bonus_fields: u8,
+    pub special_ability: Option<PapaAbility>,
 }
 
-impl WineOrderCard {
-    pub fn new(id: u32, red: u8, white: u8, vp: u8, payout: u8) -> Self {
-        Self {
-            id,
-            red_wine_needed: red,
-            white_wine_needed: white,
-            victory_points: vp,
-            payout,
-        }
-    }
+#[derive(Clone, Debug)]
+pub enum MamaAbility {
+    ExtraBonusAction,    // Can take one extra action per year
+    DiscountedStructures, // All structures cost 1 less
+    BonusHarvest,        // +1 grape when harvesting
+    FreeVinePlanting,    // Plant first vine each year for free
+}
+
+#[derive(Clone, Debug)]
+pub enum PapaAbility {
+    ExtraVineyardField,  // Start with extra field
+    AdvancedCellar,      // Can store extra wine
+    TradingConnections,  // Better wine order prices
+    WineExpertise,       // Make blush wine more efficiently
+}
+
+// Residual income system
+#[derive(Component)]
+pub struct ResidualIncome {
+    pub owner: PlayerId,
+    pub amount: u8,
+    pub source: String,
 }
 
 #[derive(Resource, Clone)]
@@ -423,6 +623,8 @@ pub struct CardDecks {
     pub wine_order_deck: Vec<WineOrderCard>,
     pub vine_discard: Vec<VineCard>,
     pub wine_order_discard: Vec<WineOrderCard>,
+    pub mama_cards: Vec<MamaCard>,
+    pub papa_cards: Vec<PapaCard>,
 }
 
 impl CardDecks {
@@ -430,34 +632,56 @@ impl CardDecks {
         let mut vine_deck = Vec::new();
         let mut wine_order_deck = Vec::new();
         
-        // Create basic vine cards
-        for i in 0..20 {
+        // Create varied vine cards with better art
+        for i in 0..30 {
+            let vine_type = if i % 2 == 0 { 
+                VineType::Red(2 + (i % 3) as u8) 
+            } else { 
+                VineType::White(2 + (i % 3) as u8) 
+            };
+            
+            let art_style = match (i % 6, &vine_type) {
+                (0..=1, VineType::Red(_)) => CardArt::BasicRed,
+                (2..=3, VineType::Red(_)) => CardArt::PremiumRed,
+                (4..=5, VineType::Red(_)) => CardArt::SpecialtyRed,
+                (0..=1, VineType::White(_)) => CardArt::BasicWhite,
+                (2..=3, VineType::White(_)) => CardArt::PremiumWhite,
+                (_, VineType::White(_)) => CardArt::SpecialtyWhite,
+                _ => CardArt::BasicRed,
+            };
+            
             vine_deck.push(VineCard {
                 id: i,
-                vine_type: if i % 2 == 0 { VineType::Red(2) } else { VineType::White(2) },
-                cost: 1,
+                vine_type,
+                cost: 1 + (i % 3) as u8,
+                art_style,
+                special_ability: if i % 10 == 0 { Some(VineAbility::HighYield) } else { None },
             });
         }
         
-        // Create varied wine order cards with different VP values
-        wine_order_deck.push(WineOrderCard::new(100, 1, 0, 1, 1)); // Easy red order
-        wine_order_deck.push(WineOrderCard::new(101, 0, 1, 1, 1)); // Easy white order
-        wine_order_deck.push(WineOrderCard::new(102, 2, 0, 2, 2)); // Medium red order
-        wine_order_deck.push(WineOrderCard::new(103, 0, 2, 2, 2)); // Medium white order
-        wine_order_deck.push(WineOrderCard::new(104, 1, 1, 2, 2)); // Mixed order
-        wine_order_deck.push(WineOrderCard::new(105, 3, 0, 4, 3)); // Hard red order
-        wine_order_deck.push(WineOrderCard::new(106, 0, 3, 4, 3)); // Hard white order
-        wine_order_deck.push(WineOrderCard::new(107, 2, 2, 5, 4)); // Hard mixed order
-        wine_order_deck.push(WineOrderCard::new(108, 4, 0, 6, 5)); // Very hard red
-        wine_order_deck.push(WineOrderCard::new(109, 0, 4, 6, 5)); // Very hard white
-        wine_order_deck.push(WineOrderCard::new(110, 3, 2, 7, 6)); // Epic order
-        wine_order_deck.push(WineOrderCard::new(111, 2, 3, 7, 6)); // Epic order 2
+        // Create enhanced wine orders
+        let wine_orders = [
+            (100, 1, 0, 1, 1), (101, 0, 1, 1, 1), (102, 2, 0, 2, 2), (103, 0, 2, 2, 2),
+            (104, 1, 1, 2, 2), (105, 3, 0, 4, 3), (106, 0, 3, 4, 3), (107, 2, 2, 5, 4),
+            (108, 4, 0, 6, 5), (109, 0, 4, 6, 5), (110, 3, 2, 7, 6), (111, 2, 3, 7, 6),
+            (112, 1, 2, 3, 3), (113, 2, 1, 3, 3), (114, 3, 1, 5, 4), (115, 1, 3, 5, 4),
+            // Blush wine orders (mixed requirements)
+            (200, 1, 1, 3, 3), (201, 2, 1, 4, 4), (202, 1, 2, 4, 4), (203, 2, 2, 6, 5),
+            // Premium orders
+            (300, 4, 2, 8, 6), (301, 2, 4, 8, 6), (302, 5, 1, 9, 7), (303, 1, 5, 9, 7),
+        ];
+        
+        for (id, red, white, vp, payout) in wine_orders {
+            wine_order_deck.push(WineOrderCard::new(id, red, white, vp, payout));
+        }
         
         Self {
             vine_deck,
             wine_order_deck,
             vine_discard: Vec::new(),
             wine_order_discard: Vec::new(),
+            mama_cards: Self::create_mama_cards(),
+            papa_cards: Self::create_papa_cards(),
         }
     }
     
@@ -467,6 +691,96 @@ impl CardDecks {
     
     pub fn draw_wine_order_card(&mut self) -> Option<WineOrderCard> {
         self.wine_order_deck.pop()
+    }
+    
+    fn create_mama_cards() -> Vec<MamaCard> {
+        vec![
+            MamaCard {
+                id: 0,
+                name: "Wealthy Widow".to_string(),
+                bonus_lira: 4,
+                bonus_workers: 0,
+                bonus_vine_cards: 1,
+                special_ability: None,
+            },
+            MamaCard {
+                id: 1,
+                name: "Industrious Organizer".to_string(),
+                bonus_lira: 2,
+                bonus_workers: 1,
+                bonus_vine_cards: 0,
+                special_ability: Some(MamaAbility::ExtraBonusAction),
+            },
+            MamaCard {
+                id: 2,
+                name: "Frugal Builder".to_string(),
+                bonus_lira: 1,
+                bonus_workers: 0,
+                bonus_vine_cards: 2,
+                special_ability: Some(MamaAbility::DiscountedStructures),
+            },
+            MamaCard {
+                id: 3,
+                name: "Harvest Expert".to_string(),
+                bonus_lira: 3,
+                bonus_workers: 0,
+                bonus_vine_cards: 0,
+                special_ability: Some(MamaAbility::BonusHarvest),
+            },
+            MamaCard {
+                id: 4,
+                name: "Vine Specialist".to_string(),
+                bonus_lira: 2,
+                bonus_workers: 0,
+                bonus_vine_cards: 1,
+                special_ability: Some(MamaAbility::FreeVinePlanting),
+            },
+        ]
+    }
+    
+    fn create_papa_cards() -> Vec<PapaCard> {
+        vec![
+            PapaCard {
+                id: 0,
+                name: "Vineyard Owner".to_string(),
+                bonus_vp: 1,
+                starting_structures: vec![StructureType::Trellis],
+                bonus_fields: 0,
+                special_ability: None,
+            },
+            PapaCard {
+                id: 1,
+                name: "Infrastructure Developer".to_string(),
+                bonus_vp: 0,
+                starting_structures: vec![StructureType::Irrigation, StructureType::Yoke],
+                bonus_fields: 0,
+                special_ability: None,
+            },
+            PapaCard {
+                id: 2,
+                name: "Land Baron".to_string(),
+                bonus_vp: 2,
+                starting_structures: vec![],
+                bonus_fields: 1,
+                special_ability: Some(PapaAbility::ExtraVineyardField),
+            },
+            PapaCard {
+                id: 3,
+                name: "Cellar Master".to_string(),
+                bonus_vp: 0,
+                starting_structures: vec![StructureType::Windmill],
+                bonus_fields: 0,
+                special_ability: Some(PapaAbility::AdvancedCellar),
+            },
+            PapaCard {
+                id: 4,
+                name: "Wine Merchant".to_string(),
+                bonus_vp: 1,
+                starting_structures: vec![StructureType::TastingRoom],
+                bonus_fields: 0,
+                special_ability: Some(PapaAbility::TradingConnections),
+            },
+        ]
     }
 }
 
@@ -525,6 +839,9 @@ pub enum CardType {
     WineOrder,
 }
 
+#[derive(Component)]
+pub struct PlayerCardsUI;
+
 #[derive(Resource)]
 pub struct GameAssets {
     pub worker_texture: Handle<Image>,
@@ -536,7 +853,7 @@ pub struct GameAssets {
 #[derive(Resource)]
 pub struct GameSettings {
     pub ai_enabled: bool,
-    pub ai_difficulty: u8, // 1 = Beginner, 2 = Intermediate
+    pub ai_difficulty: u8,
     pub audio_enabled: bool,
     pub sfx_volume: f32,
     pub music_volume: f32,

@@ -65,12 +65,20 @@ fn main() {
                 fall_system.run_if(in_state(GameState::Fall)),
                 (check_victory_system, calculate_final_scores).run_if(in_state(GameState::GameOver)),
                 ui_button_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
-                cached_ui_update_system,
-                culled_sprite_system,
+                
+                //cached_ui_update_system,
+                //culled_sprite_system,
+                update_sprites_system,
+                update_ui_system,
+
                 animate_text_system,
                 ui_game_over_system,
             ))
         .add_systems(Update, (
+                apply_residual_income_system,
+                apply_mama_abilities_system,
+                display_player_cards_system,
+
                 // Persistence & QoL systems
                 save_game_system,
                 load_game_system,

@@ -289,9 +289,10 @@ fn execute_visitor_effect(
             if let (Some(ref mut h), Some(ref mut v)) = (hand.as_mut(), vineyard.as_mut()) {
                 if !h.vine_cards.is_empty() {
                     let vine_card = h.vine_cards.remove(0);
-                    for i in 0..9 {
-                        if v.fields[i].is_none() {
-                            v.fields[i] = Some(vine_card.vine_type);
+                    // FIXED: Find an empty field and plant the vine
+                    for field in v.fields.iter_mut() {
+                        if field.vine.is_none() { // FIXED: Check field.vine instead of field
+                            field.vine = Some(vine_card.vine_type); // FIXED: Set field.vine instead of field
                             break;
                         }
                     }
@@ -321,7 +322,34 @@ fn execute_visitor_effect(
         }
         VisitorEffect::SwapFields => {
             // Advanced effect - swap two vineyard fields
-            info!("Field swap available");
+            // FIXED: Update to work with VineyardField
+            if let Some(ref mut v) = vineyard {
+                // Simple implementation: swap first two non-empty fields
+                let mut first_vine = None;
+                let mut second_vine = None;
+                let mut first_idx = None;
+                let mut second_idx = None;
+                
+                for (i, field) in v.fields.iter().enumerate() {
+                    if field.vine.is_some() {
+                        if first_idx.is_none() {
+                            first_vine = field.vine;
+                            first_idx = Some(i);
+                        } else if second_idx.is_none() {
+                            second_vine = field.vine;
+                            second_idx = Some(i);
+                            break;
+                        }
+                    }
+                }
+                
+                // Perform the swap
+                if let (Some(first), Some(second)) = (first_idx, second_idx) {
+                    v.fields[first].vine = second_vine;
+                    v.fields[second].vine = first_vine;
+                    info!("Swapped vines between fields {} and {}", first, second);
+                }
+            }
         }
     }
 }
@@ -330,7 +358,7 @@ pub fn setup_advanced_vineyards_system(
     mut commands: Commands,
     expansion_settings: Res<ExpansionSettings>,
     players: Query<&Player>,
-    existing_advanced: Query<Entity, (With<AdvancedVineyard>,Without<MarkedForDespawn>)>,
+    existing_advanced: Query<Entity, (With<AdvancedVineyard>, Without<MarkedForDespawn>)>,
 ) {
     if !expansion_settings.advanced_boards_enabled {
         return;
@@ -430,4 +458,46 @@ pub fn expansion_toggle_system(
         expansion_settings.advanced_boards_enabled = !expansion_settings.advanced_boards_enabled;
         info!("Advanced boards: {}", if expansion_settings.advanced_boards_enabled { "ON" } else { "OFF" });
     }
+}
+
+// Update any field checking functions to use the new structure:
+pub fn check_vineyard_capacity(vineyard: &Vineyard) -> usize {
+    vineyard.fields.iter().filter(|field| field.vine.is_none()).count()
+}
+
+pub fn count_planted_vines(vineyard: &Vineyard) -> usize {
+    vineyard.fields.iter().filter(|field| field.vine.is_some()).count()
+}
+
+pub fn get_vine_types_planted(vineyard: &Vineyard) -> Vec<VineType> {
+    vineyard.fields.iter()
+        .filter_map(|field| field.vine)
+        .collect()
+}
+
+// Enhanced visitor card that works with field types
+pub fn create_enhanced_visitor_cards() -> Vec<VisitorCard> {
+    vec![
+        VisitorCard {
+            id: 1010,
+            name: "Field Inspector".to_string(),
+            effect: VisitorEffect::SwapFields,
+            timing: VisitorTiming::Summer,
+            cost: 1,
+        },
+        VisitorCard {
+            id: 1011,
+            name: "Soil Expert".to_string(),
+            effect: VisitorEffect::PlantFreeVine, // Can plant on premium fields
+            timing: VisitorTiming::Summer,
+            cost: 0,
+        },
+        VisitorCard {
+            id: 1012,
+            name: "Master Gardener".to_string(),
+            effect: VisitorEffect::HarvestBonus(3), // More grapes from all fields
+            timing: VisitorTiming::Winter,
+            cost: 2,
+        },
+    ]
 }

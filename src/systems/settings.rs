@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::components::*;
 use crate::systems::audio::*;
 
 #[derive(Serialize, Deserialize, Resource, Clone)]

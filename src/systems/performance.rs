@@ -200,10 +200,18 @@ fn spawn_vineyard_sprites(commands: &mut Commands, vineyard: &Vineyard) {
         let field_y = 100.0 - ((field_idx / 3) as f32 * 40.0);
         let field_pos = Vec2::new(field_x + (vineyard.owner.0 as f32 * 200.0), field_y);
         
-        let field_color = match field {
+        // FIXED: Access the vine field properly
+        let field_color = match field.vine {  // Changed from field to field.vine
             Some(VineType::Red(_)) => Color::from(Srgba::new(0.8, 0.2, 0.2, 1.0)),
             Some(VineType::White(_)) => Color::from(Srgba::new(0.9, 0.9, 0.7, 1.0)),
-            None => Color::from(Srgba::new(0.4, 0.3, 0.2, 0.8)),
+            None => {
+                // Base color depends on field type
+                match field.field_type {
+                    FieldType::Premium => Color::from(Srgba::new(0.5, 0.4, 0.2, 0.8)), // Rich soil
+                    FieldType::Poor => Color::from(Srgba::new(0.3, 0.3, 0.3, 0.8)),    // Rocky soil
+                    FieldType::Standard => Color::from(Srgba::new(0.4, 0.3, 0.2, 0.8)), // Normal soil
+                }
+            },
         };
         
         commands.spawn((

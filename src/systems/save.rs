@@ -1,3 +1,7 @@
+// =============================================================================
+// REPLACE IN: src/systems/save.rs - Fix all the save/load functions
+// =============================================================================
+
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::components::*;
@@ -22,17 +26,26 @@ pub struct PlayerSave {
     pub lira: u8,
     pub workers: u8,
     pub grande_worker_available: bool,
+    pub is_ai: bool, // ADDED: Missing field
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VineyardSave {
     pub owner_id: u8,
-    pub fields: [Option<VineTypeSave>; 9],
+    pub fields: [Option<VineFieldSave>; 9], // UPDATED: Use VineFieldSave instead of VineTypeSave
     pub red_grapes: u8,
     pub white_grapes: u8,
     pub red_wine: u8,
     pub white_wine: u8,
     pub lira: u8,
+}
+
+// NEW: Save structure for VineyardField
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VineFieldSave {
+    pub vine: Option<VineTypeSave>,
+    pub field_type: u8, // FieldType as u8
+    pub sold_this_year: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -53,6 +66,8 @@ pub struct VineCardSave {
     pub id: u32,
     pub vine_type: VineTypeSave,
     pub cost: u8,
+    pub art_style: u8, // ADDED: CardArt as u8
+    pub special_ability: Option<u8>, // ADDED: VineAbility as u8
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -62,6 +77,8 @@ pub struct WineOrderCardSave {
     pub white_wine_needed: u8,
     pub victory_points: u8,
     pub payout: u8,
+    pub art_style: u8, // ADDED: OrderArt as u8
+    pub order_type: u8, // ADDED: OrderType as u8
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -86,6 +103,7 @@ pub struct GameConfigSave {
     pub target_victory_points: u8,
     pub current_year: u8,
     pub max_years: u8,
+    pub ai_count: u8, // ADDED: Missing field
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -104,7 +122,7 @@ pub struct SaveManager {
 impl Default for SaveManager {
     fn default() -> Self {
         Self {
-            auto_save_timer: Timer::from_seconds(30.0, TimerMode::Repeating), // Auto-save every 30 seconds
+            auto_save_timer: Timer::from_seconds(30.0, TimerMode::Repeating),
             last_save_time: 0.0,
         }
     }
@@ -180,14 +198,22 @@ fn create_save_data(
         lira: p.lira,
         workers: p.workers,
         grande_worker_available: p.grande_worker_available,
+        is_ai: p.is_ai, // ADDED: Missing field
     }).collect();
     
     let vineyards_save: Vec<_> = vineyards.iter().map(|v| VineyardSave {
         owner_id: v.owner.0,
-        fields: v.fields.map(|f| f.map(|vt| match vt {
-            VineType::Red(val) => VineTypeSave { is_red: true, value: val },
-            VineType::White(val) => VineTypeSave { is_red: false, value: val },
-        })),
+        // FIXED: Convert VineyardField array to VineFieldSave array
+        fields: v.fields.map(|field| {
+            Some(VineFieldSave {
+                vine: field.vine.map(|vt| match vt {
+                    VineType::Red(val) => VineTypeSave { is_red: true, value: val },
+                    VineType::White(val) => VineTypeSave { is_red: false, value: val },
+                }),
+                field_type: field_type_to_u8(field.field_type),
+                sold_this_year: field.sold_this_year,
+            })
+        }),
         red_grapes: v.red_grapes,
         white_grapes: v.white_grapes,
         red_wine: v.red_wine,
@@ -204,6 +230,8 @@ fn create_save_data(
                 VineType::White(val) => VineTypeSave { is_red: false, value: val },
             },
             cost: vc.cost,
+            art_style: card_art_to_u8(vc.art_style), // ADDED: Missing field
+            special_ability: vc.special_ability.map(vine_ability_to_u8), // ADDED: Missing field
         }).collect(),
         wine_order_cards: h.wine_order_cards.iter().map(|woc| WineOrderCardSave {
             id: woc.id,
@@ -211,6 +239,8 @@ fn create_save_data(
             white_wine_needed: woc.white_wine_needed,
             victory_points: woc.victory_points,
             payout: woc.payout,
+            art_style: order_art_to_u8(woc.art_style), // ADDED: Missing field
+            order_type: order_type_to_u8(woc.order_type), // ADDED: Missing field
         }).collect(),
     }).collect();
     
@@ -233,6 +263,7 @@ fn create_save_data(
         target_victory_points: config.target_victory_points,
         current_year: config.current_year,
         max_years: config.max_years,
+        ai_count: config.ai_count, // ADDED: Missing field
     };
     
     let action_spaces_save: Vec<_> = action_spaces.iter().map(|s| ActionSpaceSave {
@@ -279,22 +310,33 @@ fn load_save_data(
             lira: player_save.lira,
             workers: player_save.workers,
             grande_worker_available: player_save.grande_worker_available,
+            is_ai: player_save.is_ai, // ADDED: Missing field
         });
     }
     
     // Load vineyards
     for vineyard_save in &save_data.vineyards {
-        let vineyard_save_clone = vineyard_save.clone();
-
+        // FIXED: Convert VineFieldSave array back to VineyardField array
+        let mut fields = [VineyardField::new(FieldType::Standard); 9];
+        for (i, field_save_opt) in vineyard_save.fields.iter().enumerate() {
+            if let Some(field_save) = field_save_opt {
+                fields[i] = VineyardField {
+                    vine: field_save.vine.as_ref().map(|vt| {
+                        if vt.is_red {
+                            VineType::Red(vt.value)
+                        } else {
+                            VineType::White(vt.value)
+                        }
+                    }),
+                    field_type: u8_to_field_type(field_save.field_type),
+                    sold_this_year: field_save.sold_this_year,
+                };
+            }
+        }
+        
         commands.spawn(Vineyard {
             owner: PlayerId(vineyard_save.owner_id),
-            fields: vineyard_save_clone.fields.map(|f| f.map(|vt| {
-                if vt.is_red {
-                    VineType::Red(vt.value)
-                } else {
-                    VineType::White(vt.value)
-                }
-            })),
+            fields,
             red_grapes: vineyard_save.red_grapes,
             white_grapes: vineyard_save.white_grapes,
             red_wine: vineyard_save.red_wine,
@@ -313,6 +355,8 @@ fn load_save_data(
                 VineType::White(vc.vine_type.value)
             },
             cost: vc.cost,
+            art_style: u8_to_card_art(vc.art_style), // ADDED: Missing field
+            special_ability: vc.special_ability.map(u8_to_vine_ability), // ADDED: Missing field
         }).collect();
         
         let wine_order_cards = hand_save.wine_order_cards.iter().map(|woc| WineOrderCard {
@@ -321,6 +365,8 @@ fn load_save_data(
             white_wine_needed: woc.white_wine_needed,
             victory_points: woc.victory_points,
             payout: woc.payout,
+            art_style: u8_to_order_art(woc.art_style), // ADDED: Missing field
+            order_type: u8_to_order_type(woc.order_type), // ADDED: Missing field
         }).collect();
         
         commands.spawn(Hand {
@@ -371,11 +417,99 @@ fn load_save_data(
         target_victory_points: save_data.config.target_victory_points,
         current_year: save_data.config.current_year,
         max_years: save_data.config.max_years,
+        ai_count: save_data.config.ai_count, // ADDED: Missing field
     });
     
     // Set game state
     if let Some(state) = u8_to_state(save_data.current_state) {
         next_state.set(state);
+    }
+}
+
+// Conversion helper functions
+fn field_type_to_u8(field_type: FieldType) -> u8 {
+    match field_type {
+        FieldType::Standard => 0,
+        FieldType::Premium => 1,
+        FieldType::Poor => 2,
+    }
+}
+
+fn u8_to_field_type(value: u8) -> FieldType {
+    match value {
+        1 => FieldType::Premium,
+        2 => FieldType::Poor,
+        _ => FieldType::Standard,
+    }
+}
+
+fn card_art_to_u8(art: CardArt) -> u8 {
+    match art {
+        CardArt::BasicRed => 0,
+        CardArt::BasicWhite => 1,
+        CardArt::PremiumRed => 2,
+        CardArt::PremiumWhite => 3,
+        CardArt::SpecialtyRed => 4,
+        CardArt::SpecialtyWhite => 5,
+    }
+}
+
+fn u8_to_card_art(value: u8) -> CardArt {
+    match value {
+        1 => CardArt::BasicWhite,
+        2 => CardArt::PremiumRed,
+        3 => CardArt::PremiumWhite,
+        4 => CardArt::SpecialtyRed,
+        5 => CardArt::SpecialtyWhite,
+        _ => CardArt::BasicRed,
+    }
+}
+
+fn vine_ability_to_u8(ability: VineAbility) -> u8 {
+    match ability {
+        VineAbility::EarlyHarvest => 0,
+        VineAbility::DiseaseResistant => 1,
+        VineAbility::HighYield => 2,
+    }
+}
+
+fn u8_to_vine_ability(value: u8) -> VineAbility {
+    match value {
+        1 => VineAbility::DiseaseResistant,
+        2 => VineAbility::HighYield,
+        _ => VineAbility::EarlyHarvest,
+    }
+}
+
+fn order_art_to_u8(art: OrderArt) -> u8 {
+    match art {
+        OrderArt::BasicOrder => 0,
+        OrderArt::PremiumOrder => 1,
+        OrderArt::SeasonalOrder => 2,
+    }
+}
+
+fn u8_to_order_art(value: u8) -> OrderArt {
+    match value {
+        1 => OrderArt::PremiumOrder,
+        2 => OrderArt::SeasonalOrder,
+        _ => OrderArt::BasicOrder,
+    }
+}
+
+fn order_type_to_u8(order_type: OrderType) -> u8 {
+    match order_type {
+        OrderType::Regular => 0,
+        OrderType::Premium => 1,
+        OrderType::Seasonal => 2,
+    }
+}
+
+fn u8_to_order_type(value: u8) -> OrderType {
+    match value {
+        1 => OrderType::Premium,
+        2 => OrderType::Seasonal,
+        _ => OrderType::Regular,
     }
 }
 

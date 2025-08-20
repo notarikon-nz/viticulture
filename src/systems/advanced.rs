@@ -32,16 +32,64 @@ pub fn create_premium_wine_orders() -> Vec<WineOrderCard> {
 pub fn create_premium_vine_cards() -> Vec<VineCard> {
     vec![
         // High-value vines
-        VineCard { id: 400, vine_type: VineType::Red(4), cost: 3 },
-        VineCard { id: 401, vine_type: VineType::White(4), cost: 3 },
-        VineCard { id: 402, vine_type: VineType::Red(3), cost: 2 },
-        VineCard { id: 403, vine_type: VineType::White(3), cost: 2 },
+        VineCard { 
+            id: 400, 
+            vine_type: VineType::Red(4), 
+            cost: 3,
+            art_style: CardArt::PremiumRed,        // ADDED: Missing field
+            special_ability: None,                 // ADDED: Missing field
+        },
+        VineCard { 
+            id: 401, 
+            vine_type: VineType::White(4), 
+            cost: 3,
+            art_style: CardArt::PremiumWhite,      // ADDED: Missing field
+            special_ability: None,                 // ADDED: Missing field
+        },
+        VineCard { 
+            id: 402, 
+            vine_type: VineType::Red(3), 
+            cost: 2,
+            art_style: CardArt::SpecialtyRed,      // ADDED: Missing field
+            special_ability: Some(VineAbility::HighYield), // ADDED: Missing field with ability
+        },
+        VineCard { 
+            id: 403, 
+            vine_type: VineType::White(3), 
+            cost: 2,
+            art_style: CardArt::SpecialtyWhite,    // ADDED: Missing field
+            special_ability: Some(VineAbility::HighYield), // ADDED: Missing field with ability
+        },
         
-        // Specialty vines (would have special rules in full implementation)
-        VineCard { id: 404, vine_type: VineType::Red(2), cost: 1 }, // Early harvest
-        VineCard { id: 405, vine_type: VineType::White(2), cost: 1 }, // Disease resistant
-        VineCard { id: 406, vine_type: VineType::Red(3), cost: 1 }, // Hardy variety
-        VineCard { id: 407, vine_type: VineType::White(3), cost: 1 }, // Cold climate
+        // Specialty vines (with special rules in full implementation)
+        VineCard { 
+            id: 404, 
+            vine_type: VineType::Red(2), 
+            cost: 1,
+            art_style: CardArt::BasicRed,          // ADDED: Missing field
+            special_ability: Some(VineAbility::EarlyHarvest), // ADDED: Missing field with ability
+        },
+        VineCard { 
+            id: 405, 
+            vine_type: VineType::White(2), 
+            cost: 1,
+            art_style: CardArt::BasicWhite,        // ADDED: Missing field
+            special_ability: Some(VineAbility::DiseaseResistant), // ADDED: Missing field with ability
+        },
+        VineCard { 
+            id: 406, 
+            vine_type: VineType::Red(3), 
+            cost: 1,
+            art_style: CardArt::SpecialtyRed,      // ADDED: Missing field
+            special_ability: Some(VineAbility::DiseaseResistant), // ADDED: Missing field with ability
+        },
+        VineCard { 
+            id: 407, 
+            vine_type: VineType::White(3), 
+            cost: 1,
+            art_style: CardArt::SpecialtyWhite,    // ADDED: Missing field
+            special_ability: Some(VineAbility::EarlyHarvest), // ADDED: Missing field with ability
+        },
     ]
 }
 

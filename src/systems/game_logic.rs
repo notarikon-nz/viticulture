@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::systems::*;
-use crate::systems::ui::setup_ui;
-use crate::systems::animations::spawn_animated_text;
 
 const YELLOW: Srgba = Srgba::new(1.0, 1.0, 0.0, 1.0);
 const GOLD: Srgba = Srgba::new(1.0, 0.84, 0.0, 1.0);
@@ -541,4 +539,111 @@ fn create_victory_point_particles(center: Vec2, count: usize) -> Vec<Particle> {
             }
         })
         .collect()
+}
+
+// Apply residual income at the start of each spring
+pub fn apply_residual_income_system(
+    mut players: Query<&mut Player>,
+    residual_incomes: Query<&ResidualIncome>,
+    current_state: Res<State<GameState>>,
+) {
+    // Only apply at the start of spring phase
+    if current_state.is_changed() && matches!(current_state.get(), GameState::Spring) {
+        for income in residual_incomes.iter() {
+            if let Some(mut player) = players.iter_mut().find(|p| p.id == income.owner) {
+                player.gain_lira(income.amount);
+                info!("Player {:?} gained {} lira from residual income: {}", 
+                      income.owner, income.amount, income.source);
+            }
+        }
+    }
+}
+
+// Apply Mama card special abilities when actions are performed
+pub fn apply_mama_abilities_system(
+    mama_cards: Query<&MamaCard>,
+    mut players: Query<&mut Player>,
+    mut vineyards: Query<&mut Vineyard>,
+    workers: Query<&Worker, Changed<Worker>>,
+    mut commands: Commands,
+) {
+    for worker in workers.iter() {
+        // Only apply abilities when worker is newly placed
+        if let Some(action) = worker.placed_at {
+            // Find the player's mama card
+            if let Some(mama) = mama_cards.iter().find(|m| m.id == worker.owner.0) {
+                match (&mama.special_ability, action) {
+                    (Some(MamaAbility::BonusHarvest), ActionSpace::Harvest) => {
+                        if let Some(mut vineyard) = vineyards.iter_mut().find(|v| v.owner == worker.owner) {
+                            vineyard.red_grapes += 1; // Bonus harvest grape
+                            info!("Mama ability: {} got bonus harvest grape", mama.name);
+                        }
+                    },
+                    (Some(MamaAbility::DiscountedStructures), ActionSpace::BuildStructure) => {
+                        if let Some(mut vineyard) = vineyards.iter_mut().find(|v| v.owner == worker.owner) {
+                            vineyard.lira += 1; // Refund 1 lira (structure discount)
+                            info!("Mama ability: {} got structure discount", mama.name);
+                        }
+                    },
+                    (Some(MamaAbility::FreeVinePlanting), ActionSpace::PlantVine) => {
+                        if let Some(mut vineyard) = vineyards.iter_mut().find(|v| v.owner == worker.owner) {
+                            vineyard.lira += 1; // Refund vine planting cost
+                            info!("Mama ability: {} got free vine planting", mama.name);
+                        }
+                    },
+                    _ => {} // No ability or doesn't match action
+                }
+            }
+        }
+    }
+}
+
+// Enhanced wine making that considers Papa card abilities
+pub fn enhanced_make_wine_action(
+    player_id: PlayerId,
+    vineyards: &mut Query<&mut Vineyard>,
+    papa_cards: &Query<&PapaCard>,
+) -> u8 {
+    if let Some(mut vineyard) = vineyards.iter_mut().find(|v| v.owner == player_id) {
+        // Check if player has wine expertise papa ability
+        let has_wine_expertise = papa_cards.iter()
+            .any(|p| p.id == player_id.0 && 
+                 matches!(p.special_ability, Some(PapaAbility::WineExpertise)));
+        
+        let red_available = vineyard.red_grapes;
+        let white_available = vineyard.white_grapes;
+        let mut wine_made = 0;
+        
+        // Enhanced wine making with multiple options
+        if red_available >= 1 && white_available >= 1 {
+            // Blush wine: 1 red + 1 white grape → wine (more efficient with expertise)
+            let blush_efficiency = if has_wine_expertise { 2 } else { 1 };
+            vineyard.red_grapes -= 1;
+            vineyard.white_grapes -= 1;
+            vineyard.white_wine += blush_efficiency; // Store blush as white wine
+            wine_made += blush_efficiency;
+            info!("Made blush wine (efficiency: {})", blush_efficiency);
+        } else if red_available >= 2 && white_available >= 2 {
+            // Sparkling wine: 2 red + 2 white → 3 wine (premium option)
+            vineyard.red_grapes -= 2;
+            vineyard.white_grapes -= 2;
+            vineyard.red_wine += 3; // Sparkling gives bonus wine
+            wine_made += 3;
+            info!("Made sparkling wine");
+        } else {
+            // Regular wine making: 1 grape → 1 wine
+            let red_to_use = red_available.min(2);
+            let white_to_use = white_available.min(2);
+            vineyard.red_grapes -= red_to_use;
+            vineyard.white_grapes -= white_to_use;
+            vineyard.red_wine += red_to_use;
+            vineyard.white_wine += white_to_use;
+            wine_made += red_to_use + white_to_use;
+            info!("Made regular wine: {} red, {} white", red_to_use, white_to_use);
+        }
+        
+        wine_made
+    } else {
+        0
+    }
 }

@@ -192,7 +192,8 @@ fn evaluate_action(
             if !hand.vine_cards.is_empty() && vineyard.lira >= 1 { 1.0 } else { 0.0 }
         }
         ActionSpace::Harvest => {
-            let planted_vines = vineyard.fields.iter().filter(|f| f.is_some()).count();
+            // FIXED: Check if any fields have vines planted
+            let planted_vines = vineyard.fields.iter().filter(|f| f.vine.is_some()).count();
             if planted_vines > 0 { 0.9 } else { 0.0 }
         }
         ActionSpace::MakeWine => {

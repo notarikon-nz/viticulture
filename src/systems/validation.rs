@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use crate::components::*;
-use rand::prelude::*;
 
 #[derive(Resource)]
 pub struct GameValidation {
@@ -74,7 +73,7 @@ pub fn validate_action_requirements(
     players: &Query<&Player>,
     hands: &Query<&Hand>,
     vineyards: &Query<&Vineyard>,
-    validation: &Res<GameValidation>, // Keep original signature
+    validation: &Res<GameValidation>,
 ) -> ValidationResult {
     if !validation.prevent_illegal_moves {
         return ValidationResult::Valid;
@@ -92,13 +91,15 @@ pub fn validate_action_requirements(
             if vineyard.lira == 0 {
                 return ValidationResult::Invalid("Not enough lira to plant vine".to_string());
             }
-            let empty_fields = vineyard.fields.iter().filter(|f| f.is_none()).count();
+            // FIXED: Check for empty fields (fields without vines)
+            let empty_fields = vineyard.fields.iter().filter(|f| f.vine.is_none()).count();
             if empty_fields == 0 {
                 return ValidationResult::Invalid("No empty fields to plant vine".to_string());
             }
         }
         ActionSpace::Harvest => {
-            let planted_vines = vineyard.fields.iter().filter(|f| f.is_some()).count();
+            // FIXED: Check for planted vines
+            let planted_vines = vineyard.fields.iter().filter(|f| f.vine.is_some()).count();
             if planted_vines == 0 {
                 return ValidationResult::Invalid("No vines planted to harvest".to_string());
             }
@@ -140,6 +141,7 @@ pub fn validate_action_requirements(
     
     ValidationResult::Valid
 }
+
 
 pub enum ValidationResult {
     Valid,
@@ -227,12 +229,14 @@ pub fn balance_card_distribution(card_decks: &mut ResMut<CardDecks>) {
     // Rebalance if needed (should be roughly 50/50)
     let total = red_count + white_count;
     if total > 0 && (red_count as f32 / total as f32) < 0.4 {
-        // Add more red cards
+        // Add more red cards - FIXED: Include all required fields
         for i in 200..205 {
             card_decks.vine_deck.push(VineCard {
                 id: i,
                 vine_type: VineType::Red(2),
                 cost: 1,
+                art_style: CardArt::BasicRed,  // ADDED: Missing field
+                special_ability: None,         // ADDED: Missing field
             });
         }
     }
