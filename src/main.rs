@@ -56,7 +56,7 @@ fn main() {
         .add_systems(
             Update, (
                 main_menu_system.run_if(in_state(GameState::MainMenu)),
-                (setup_game_system, setup_ai_players).run_if(in_state(GameState::Setup)),
+                (setup_game_system, setup_ai_players, setup_residual_payment_system).run_if(in_state(GameState::Setup)),
                 (spring_system, start_background_music).run_if(in_state(GameState::Spring)),
                 mouse_input_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 worker_placement_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),

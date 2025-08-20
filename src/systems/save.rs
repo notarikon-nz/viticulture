@@ -79,6 +79,7 @@ pub struct WineOrderCardSave {
     pub payout: u8,
     pub art_style: u8, // ADDED: OrderArt as u8
     pub order_type: u8, // ADDED: OrderType as u8
+    pub residual_payment: u8,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -241,6 +242,7 @@ fn create_save_data(
             payout: woc.payout,
             art_style: order_art_to_u8(woc.art_style), // ADDED: Missing field
             order_type: order_type_to_u8(woc.order_type), // ADDED: Missing field
+            residual_payment: woc.residual_payment,
         }).collect(),
     }).collect();
     
@@ -367,6 +369,7 @@ fn load_save_data(
             payout: woc.payout,
             art_style: u8_to_order_art(woc.art_style), // ADDED: Missing field
             order_type: u8_to_order_type(woc.order_type), // ADDED: Missing field
+            residual_payment: woc.residual_payment,
         }).collect();
         
         commands.spawn(Hand {

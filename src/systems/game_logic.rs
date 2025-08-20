@@ -135,6 +135,8 @@ pub fn execute_action(
     players: &mut Query<&mut Player>,
     card_decks: &mut ResMut<CardDecks>,
     commands: &mut Commands,
+    trackers: &mut Query<&mut ResidualPaymentTracker>,
+    structures: &Query<&Structure>, 
     audio_assets: &Res<AudioAssets>,
     audio_settings: &Res<AudioSettings>,
     animation_settings: &Res<AnimationSettings>,
@@ -174,18 +176,23 @@ pub fn execute_action(
         ActionSpace::PlantVine => {
             if let (Some(hand), Some(vineyard)) = (hand.as_mut(), vineyard.as_mut()) {
                 if !hand.vine_cards.is_empty() {
-                    let vine_card = hand.vine_cards.remove(0);
-                    let structures = Vec::new();
+                    let vine_card = &hand.vine_cards[0];
+                    let player_structures: Vec<_> = structures.iter()
+                        .filter(|s| s.owner == player_id)
+                        .cloned()
+                        .collect();
+                    
+                    // Find first suitable field with structure requirements
                     for i in 0..9 {
-                        if vineyard.can_plant_vine(i, &vine_card, &structures) {
-                            if vineyard.plant_vine(i, vine_card.clone(), &structures) {
-                                // Construction particles
-                                let field_pos = calculate_field_position(player_id, i);
-                                spawn_construction_particles(commands, field_pos, animation_settings);
-                                
-                                crate::systems::animations::spawn_animated_text(commands, player_id, "Planted!", Color::from(Srgba::new(0.4, 0.8, 0.4, 1.0)));
-                                break;
-                            }
+                        if vineyard.can_plant_vine_with_requirements(i, vine_card, &player_structures) {
+                            let vine_card = hand.vine_cards.remove(0);
+                            vineyard.fields[i].vine = Some(vine_card.vine_type);
+                            vineyard.lira -= vine_card.cost;
+                            
+                            let field_pos = calculate_field_position(player_id, i);
+                            spawn_construction_particles(commands, field_pos, animation_settings);
+                            crate::systems::animations::spawn_animated_text(commands, player_id, "Planted!", Color::from(Srgba::new(0.4, 0.8, 0.4, 1.0)));
+                            break;
                         }
                     }
                 }
@@ -250,25 +257,26 @@ pub fn execute_action(
                     let order = &hand.wine_order_cards[0];
                     if vineyard.can_fulfill_order(order) {
                         let order = hand.wine_order_cards.remove(0);
-                        vineyard.fulfill_order(&order);
+                        vineyard.red_wine -= order.red_wine_needed;
+                        vineyard.white_wine -= order.white_wine_needed;
+                        
+                        // Apply immediate rewards
                         player.gain_victory_points(order.victory_points);
-                        player.gain_lira(order.payout);
+                        player.gain_lira(order.immediate_payout());
                         
-                        // Victory point particles
+                        // Advance residual payment tracker
+                        if let Some(mut tracker) = trackers.iter_mut().find(|t| t.owner == player_id) {
+                            tracker.advance(order.residual_payment());
+                        }
+                        
+                        // Existing particle effects...
                         spawn_victory_point_particles(commands, player_pos, order.victory_points, animation_settings);
-                        
-                        // Lira particles if earned
-                        if order.payout > 0 {
-                            spawn_lira_particles(commands, player_pos + Vec2::new(50.0, 0.0), order.payout, animation_settings);
+                        if order.immediate_payout() > 0 {
+                            spawn_lira_particles(commands, player_pos + Vec2::new(50.0, 0.0), order.immediate_payout(), animation_settings);
                         }
                         
                         crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::VictoryPoint);
                         crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} VP", order.victory_points), Color::from(Srgba::new(1.0, 1.0, 0.0, 1.0)));
-                        
-                        if order.payout > 0 {
-                            crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
-                            crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} Lira", order.payout), Color::from(Srgba::new(1.0, 0.84, 0.0, 1.0)));
-                        }
                     }
                 }
             }
@@ -559,6 +567,25 @@ pub fn apply_residual_income_system(
     }
 }
 
+// Apply residual payments each spring
+pub fn apply_residual_payments_system(
+    mut players: Query<&mut Player>,
+    trackers: Query<&ResidualPaymentTracker>,
+    current_state: Res<State<GameState>>,
+) {
+    if current_state.is_changed() && matches!(current_state.get(), GameState::Spring) {
+        for tracker in trackers.iter() {
+            if let Some(mut player) = players.iter_mut().find(|p| p.id == tracker.owner) {
+                let income = tracker.annual_income();
+                if income > 0 {
+                    player.gain_lira(income);
+                    info!("Player {:?} gained {} lira from residual payments", tracker.owner, income);
+                }
+            }
+        }
+    }
+}
+
 // Apply Mama card special abilities when actions are performed
 pub fn apply_mama_abilities_system(
     mama_cards: Query<&MamaCard>,
@@ -826,5 +853,278 @@ pub fn fall_draw_visitors_system(
             commands.entity(entity).despawn();
         }
         next_state.set(GameState::Winter);
+    }
+}
+
+// Update wine order fulfillment to advance residual tracker
+pub fn fulfill_order_with_residual(
+    player_id: PlayerId,
+    order: &WineOrderCard,
+    vineyard: &mut Vineyard,
+    player: &mut Player,
+    trackers: &mut Query<&mut ResidualPaymentTracker>,
+) -> bool {
+    if vineyard.can_fulfill_order(order) {
+        vineyard.red_wine -= order.red_wine_needed;
+        vineyard.white_wine -= order.white_wine_needed;
+        
+        // Apply immediate rewards
+        player.gain_victory_points(order.victory_points);
+        player.gain_lira(order.immediate_payout());
+        
+        // Advance residual payment tracker
+        if let Some(mut tracker) = trackers.iter_mut().find(|t| t.owner == player_id) {
+            tracker.advance(order.residual_payment());
+        }
+        
+        true
+    } else {
+        false
+    }
+}
+
+// Enhanced plant vine action with structure requirements
+pub fn plant_vine_with_requirements_system(
+    player_id: PlayerId,
+    hands: &mut Query<&mut Hand>,
+    vineyards: &mut Query<&mut Vineyard>,
+    structures: &Query<&Structure>,
+    commands: &mut Commands,
+) -> bool {
+    let mut hand = hands.iter_mut().find(|h| h.owner == player_id);
+    let mut vineyard = vineyards.iter_mut().find(|v| v.owner == player_id);
+    
+    if let (Some(hand), Some(vineyard)) = (hand.as_mut(), vineyard.as_mut()) {
+        if !hand.vine_cards.is_empty() {
+            let vine_card = &hand.vine_cards[0];
+            let player_structures: Vec<_> = structures.iter()
+                .filter(|s| s.owner == player_id)
+                .cloned()
+                .collect();
+            
+            // Find first suitable field
+            for i in 0..9 {
+                if vineyard.can_plant_vine_with_requirements(i, vine_card, &player_structures) {
+                    let vine_card = hand.vine_cards.remove(0);
+                    vineyard.fields[i].vine = Some(vine_card.vine_type);
+                    vineyard.lira -= vine_card.cost;
+                    
+                    info!("Planted {:?} in field {} with structure requirements met", vine_card.vine_type, i);
+                    return true;
+                }
+            }
+            
+            // If no suitable field found, show requirements
+            let requirements = vine_card.requirements();
+            if requirements.needs_trellis || requirements.needs_irrigation {
+                let mut missing = Vec::new();
+                if requirements.needs_trellis {
+                    missing.push("Trellis");
+                }
+                if requirements.needs_irrigation {
+                    missing.push("Irrigation");
+                }
+                info!("Cannot plant vine - missing structures: {}", missing.join(", "));
+            }
+        }
+    }
+    false
+}
+
+// Field selling/buying system
+pub fn field_transaction_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut vineyards: Query<&mut Vineyard>,
+    turn_order: Res<TurnOrder>,
+    mut commands: Commands,
+) {
+    if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
+        if let Some(mut vineyard) = vineyards.iter_mut().find(|v| v.owner == *current_player_id) {
+            
+            // Sell field with S key (for testing)
+            if keyboard.just_pressed(KeyCode::KeyS) {
+                for i in 0..9 {
+                    if vineyard.fields[i].can_sell() {
+                        if let Some(value) = vineyard.sell_field(i) {
+                            info!("Sold field {} for {} lira", i, value);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Buy back field with B key (for testing)
+            if keyboard.just_pressed(KeyCode::KeyB) {
+                for i in 0..9 {
+                    if vineyard.buy_back_field(i) {
+                        info!("Bought back field {} ", i);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Enhanced worker placement for grande workers
+pub fn enhanced_worker_placement_system(
+    mut workers: Query<&mut Worker>,
+    mut action_spaces: Query<&mut ActionSpaceSlot>,
+    turn_order: Res<TurnOrder>,
+    current_state: Res<State<GameState>>,
+) {
+    if let Some(current_player_id) = turn_order.players.get(turn_order.current_player) {
+        // Find available grande worker
+        if let Some(mut grande_worker) = workers.iter_mut()
+            .find(|w| w.owner == *current_player_id && w.is_grande && w.placed_at.is_none()) {
+            
+            // Find fully occupied spaces where grande worker could be placed
+            for mut space in action_spaces.iter_mut() {
+                let is_correct_season = match current_state.get() {
+                    GameState::Summer => space.is_summer,
+                    GameState::Winter => !space.is_summer,
+                    _ => false,
+                };
+                
+                if is_correct_season && space.occupied_by.is_some() {
+                    // This space is occupied, but grande worker can still use it
+                    // Place grande worker "on the action art"
+                    if space.place_grande_on_occupied(*current_player_id) {
+                        space.bonus_worker_slot = Some(*current_player_id);
+                        info!("Grande worker placed on occupied action {:?}", space.action);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Update card generation to include structure requirements
+pub fn create_enhanced_vine_deck() -> Vec<VineCard> {
+    let mut deck = Vec::new();
+    
+    // Basic vines (no requirements)
+    for i in 0..8 {
+        deck.push(VineCard {
+            id: i,
+            vine_type: if i % 2 == 0 { VineType::Red(1) } else { VineType::White(1) },
+            cost: 1,
+            art_style: if i % 2 == 0 { CardArt::BasicRed } else { CardArt::BasicWhite },
+            special_ability: None,
+        });
+    }
+    
+    // Trellis-requiring vines
+    for i in 10..16 {
+        deck.push(VineCard {
+            id: i,
+            vine_type: if i % 2 == 0 { VineType::Red(3) } else { VineType::White(3) },
+            cost: 2,
+            art_style: if i % 2 == 0 { CardArt::PremiumRed } else { CardArt::PremiumWhite },
+            special_ability: None,
+        });
+    }
+    
+    // Irrigation-requiring vines
+    for i in 20..24 {
+        deck.push(VineCard {
+            id: i,
+            vine_type: if i % 2 == 0 { VineType::Red(3) } else { VineType::White(3) },
+            cost: 3,
+            art_style: if i % 2 == 0 { CardArt::SpecialtyRed } else { CardArt::SpecialtyWhite },
+            special_ability: Some(VineAbility::HighYield),
+        });
+    }
+    
+    // Premium vines (need both structures)
+    for i in 30..34 {
+        deck.push(VineCard {
+            id: i,
+            vine_type: if i % 2 == 0 { VineType::Red(4) } else { VineType::White(4) },
+            cost: 4,
+            art_style: if i % 2 == 0 { CardArt::SpecialtyRed } else { CardArt::SpecialtyWhite },
+            special_ability: Some(VineAbility::DiseaseResistant),
+        });
+    }
+    
+    deck
+}
+
+// Enhanced wine orders with residual payments
+pub fn create_wine_orders_with_residual() -> Vec<WineOrderCard> {
+    vec![
+        // Basic orders (no residual)
+        WineOrderCard::new(100, 1, 0, 1, 1),
+        WineOrderCard::new(101, 0, 1, 1, 1),
+        WineOrderCard::new(102, 2, 0, 2, 2),
+        
+        // Orders with residual payments
+        WineOrderCard::new_with_residual(200, 2, 1, 3, 2, 1), // 2 immediate + 1 residual
+        WineOrderCard::new_with_residual(201, 1, 2, 3, 1, 2), // 1 immediate + 2 residual  
+        WineOrderCard::new_with_residual(202, 3, 2, 5, 3, 2), // 3 immediate + 2 residual
+        WineOrderCard::new_with_residual(203, 4, 3, 7, 2, 3), // 2 immediate + 3 residual (high residual)
+        
+        // Premium orders
+        WineOrderCard::new_with_residual(300, 5, 2, 8, 4, 1), 
+        WineOrderCard::new_with_residual(301, 3, 5, 9, 3, 2),
+        WineOrderCard::new_with_residual(302, 6, 4, 12, 5, 3),
+    ]
+}
+
+pub fn validate_actions_with_requirements(
+    player_id: PlayerId,
+    action: ActionSpace,
+    players: &Query<&Player>,
+    hands: &Query<&Hand>,
+    vineyards: &Query<&Vineyard>,
+    structures: &Query<&Structure>,
+) -> ValidationResult {
+    match action {
+        ActionSpace::PlantVine => {
+            let hand = hands.iter().find(|h| h.owner == player_id).unwrap();
+            let vineyard = vineyards.iter().find(|v| v.owner == player_id).unwrap();
+            
+            if hand.vine_cards.is_empty() {
+                return ValidationResult::Invalid("No vine cards to plant".to_string());
+            }
+            
+            let vine_card = &hand.vine_cards[0];
+            let player_structures: Vec<_> = structures.iter()
+                .filter(|s| s.owner == player_id)
+                .cloned()
+                .collect();
+            
+            let can_plant = (0..9).any(|i| vineyard.can_plant_vine_with_requirements(i, vine_card, &player_structures));
+            
+            if !can_plant {
+                let requirements = vine_card.requirements();
+                if requirements.needs_trellis || requirements.needs_irrigation {
+                    let mut missing = Vec::new();
+                    if requirements.needs_trellis {
+                        missing.push("Trellis");
+                    }
+                    if requirements.needs_irrigation {
+                        missing.push("Irrigation");
+                    }
+                    return ValidationResult::Invalid(format!("Missing required structures: {}", missing.join(", ")));
+                } else {
+                    return ValidationResult::Invalid("No available fields or insufficient lira".to_string());
+                }
+            }
+        }
+        _ => return ValidationResult::Valid,
+    }
+    
+    ValidationResult::Valid
+}
+
+pub enum ValidationResult {
+    Valid,
+    Invalid(String),
+}
+
+impl ValidationResult {
+    pub fn is_valid(&self) -> bool {
+        matches!(self, ValidationResult::Valid)
     }
 }

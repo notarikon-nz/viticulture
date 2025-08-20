@@ -139,3 +139,13 @@ pub fn setup_game_system(
           config.player_count, config.ai_count);
     next_state.set(GameState::Spring);
 }
+
+// Update setup to include residual payment trackers
+pub fn setup_residual_payment_system(
+    mut commands: Commands,
+    players: Query<&Player>,
+) {
+    for player in players.iter() {
+        commands.spawn(ResidualPaymentTracker::new(player.id));
+    }
+}

@@ -56,6 +56,9 @@ pub fn ai_decision_system(
     audio_assets: Res<AudioAssets>,
     audio_settings: Res<AudioSettings>,
     animation_settings: Res<AnimationSettings>,
+    // mut trackers: Query<&mut ResidualPaymentTracker>,
+    (mut trackers, structures) : (Query<&mut ResidualPaymentTracker>, Query<&Structure>),
+    // structures: Query<&Structure>, 
 ) {
     if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
         return;
@@ -95,6 +98,8 @@ pub fn ai_decision_system(
                         &audio_assets,
                         &audio_settings,
                         &animation_settings,
+                        &mut trackers,
+                        &structures,
                     );
                 }
             }
@@ -234,6 +239,8 @@ fn execute_ai_action(
     audio_assets: &Res<AudioAssets>,    // Fixed: removed mut
     audio_settings: &Res<AudioSettings>, // Fixed: removed mut
     animation_settings: &Res<AnimationSettings>,
+    trackers: &mut Query<&mut ResidualPaymentTracker>,
+    structures: &Query<&Structure>, 
 ) {
     // Find and place a worker
     let mut worker_placed = false;
@@ -278,7 +285,7 @@ fn execute_ai_action(
     }
     
     if worker_placed {
-        execute_action(action, player_id, hands, vineyards, players, card_decks, commands, audio_assets, audio_settings, animation_settings);
+        execute_action(action, player_id, hands, vineyards, players, card_decks, commands, trackers, structures, audio_assets, audio_settings, animation_settings);
         info!("AI Player {:?} executed action {:?}", player_id, action);
     }
 }

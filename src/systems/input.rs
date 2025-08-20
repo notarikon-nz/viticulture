@@ -6,6 +6,7 @@ use crate::systems::audio::*;
 
 const GREY: Srgba = Srgba::new(0.6, 0.6, 0.6, 1.0);
 
+
 pub fn mouse_input_system(
     mouse_input: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window>,
@@ -22,11 +23,14 @@ pub fn mouse_input_system(
     audio_assets: Res<AudioAssets>,
     audio_settings: Res<AudioSettings>,
     animation_settings: Res<AnimationSettings>,
+    // mut trackers: Query<&mut ResidualPaymentTracker>,
+    (mut trackers, structures) : (Query<&mut ResidualPaymentTracker>, Query<&Structure>),
+    // structures: Query<&Structure>, 
 ) {
     if !mouse_input.just_pressed(MouseButton::Left) {
         return;
     }
-    
+
     let window = windows.single();
     let (camera, camera_transform) = camera_q.single();
     
@@ -94,7 +98,9 @@ pub fn mouse_input_system(
                                         &mut vineyards, 
                                         &mut players, 
                                         &mut card_decks, 
-                                        &mut commands, 
+                                        &mut commands,
+                                        &mut trackers,
+                                        &structures,
                                         &audio_assets, 
                                         &audio_settings,
                                         &animation_settings,
@@ -130,6 +136,8 @@ pub fn ui_button_system(
     audio_assets: Res<AudioAssets>,
     audio_settings: Res<AudioSettings>,
     animation_settings: Res<AnimationSettings>,
+    mut trackers: Query<&mut ResidualPaymentTracker>,
+    structures: Query<&Structure>, 
 ) {
     for (interaction, action_button, mut color) in &mut interaction_query {
         match *interaction {
@@ -159,7 +167,10 @@ pub fn ui_button_system(
                             }
                         }
                         
-                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &audio_assets, &audio_settings, &animation_settings);
+                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, 
+                            &mut trackers,
+                            &structures,
+                            &audio_assets, &audio_settings, &animation_settings);
                         
                         for mut space in action_spaces.iter_mut() {
                             if space.action == action_button.action {

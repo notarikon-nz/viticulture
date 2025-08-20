@@ -180,6 +180,18 @@ impl VineyardField {
         }
     }
     
+    pub fn can_sell(&self) -> bool {
+        self.vine.is_none() // Can only sell empty fields
+    }
+    
+    pub fn sell_value(&self) -> u8 {
+        match self.field_type {
+            FieldType::Standard => 1,
+            FieldType::Premium => 2,
+            FieldType::Poor => 1,
+        }
+    }
+
     // Helper methods for easier checking
     pub fn is_empty(&self) -> bool {
         self.vine.is_none()
@@ -266,6 +278,26 @@ impl Vineyard {
         
         self.lira >= cost
     }
+
+    pub fn can_plant_vine_with_requirements(&self, field_index: usize, vine_card: &VineCard, structures: &[Structure]) -> bool {
+        if field_index >= 9 || self.fields[field_index].vine.is_some() {
+            return false;
+        }
+        
+        let requirements = vine_card.requirements();
+        let has_trellis = structures.iter().any(|s| s.owner == self.owner && matches!(s.structure_type, StructureType::Trellis));
+        let has_irrigation = structures.iter().any(|s| s.owner == self.owner && matches!(s.structure_type, StructureType::Irrigation));
+        
+        if requirements.needs_trellis && !has_trellis {
+            return false;
+        }
+        if requirements.needs_irrigation && !has_irrigation {
+            return false;
+        }
+        
+        // Check lira cost
+        self.lira >= vine_card.cost
+    }    
     
     pub fn plant_vine(&mut self, field_index: usize, vine_card: VineCard, structures: &[Structure]) -> bool {
         if self.can_plant_vine(field_index, &vine_card, structures) {
@@ -405,6 +437,47 @@ impl Vineyard {
         
         bonus
     }
+
+    pub fn sell_field(&mut self, field_index: usize) -> Option<u8> {
+        if field_index >= 9 {
+            return None;
+        }
+        
+        let field = &mut self.fields[field_index];
+        if field.can_sell() {
+            let value = field.sell_value();
+            field.sold_this_year = true;
+            self.lira += value;
+            Some(value)
+        } else {
+            None
+        }
+    }
+    
+    pub fn buy_back_field(&mut self, field_index: usize) -> bool {
+        if field_index >= 9 {
+            return false;
+        }
+        
+        let field = &self.fields[field_index];
+        if field.sold_this_year {
+            let cost = field.sell_value();
+            if self.lira >= cost {
+                self.lira -= cost;
+                self.fields[field_index].sold_this_year = false;
+                return true;
+            }
+        }
+        false
+    }
+    
+    pub fn available_fields(&self) -> Vec<usize> {
+        self.fields.iter()
+            .enumerate()
+            .filter(|(_, field)| field.vine.is_none() && !field.sold_this_year)
+            .map(|(i, _)| i)
+            .collect()
+    }    
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -421,6 +494,37 @@ pub struct VineCard {
     pub cost: u8,
     pub art_style: CardArt,
     pub special_ability: Option<VineAbility>, // New: special vine abilities
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct VineRequirements {
+    pub needs_trellis: bool,
+    pub needs_irrigation: bool,
+}
+
+impl VineCard {
+    pub fn requirements(&self) -> VineRequirements {
+        match (self.vine_type, self.cost) {
+            // High-value vines need structures
+            (VineType::Red(4) | VineType::White(4), _) => VineRequirements { 
+                needs_trellis: true, 
+                needs_irrigation: true 
+            },
+            (VineType::Red(3) | VineType::White(3), _) => VineRequirements { 
+                needs_trellis: true, 
+                needs_irrigation: false 
+            },
+            // Special high-cost vines need irrigation
+            (_, cost) if cost >= 3 => VineRequirements { 
+                needs_trellis: false, 
+                needs_irrigation: true 
+            },
+            _ => VineRequirements { 
+                needs_trellis: false, 
+                needs_irrigation: false 
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -469,6 +573,7 @@ pub struct WineOrderCard {
     pub payout: u8,
     pub art_style: OrderArt,
     pub order_type: OrderType, // New: different order types
+    pub residual_payment: u8,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -527,8 +632,30 @@ impl WineOrderCard {
             payout,
             art_style,
             order_type,
+            residual_payment: 0,
         }
     }
+
+    pub fn new_with_residual(id: u32, red: u8, white: u8, vp: u8, payout: u8, residual: u8) -> Self {
+        Self {
+            id,
+            red_wine_needed: red,
+            white_wine_needed: white,
+            victory_points: vp,
+            payout,
+            art_style: if vp >= 5 { OrderArt::PremiumOrder } else { OrderArt::BasicOrder },
+            order_type: if vp >= 5 { OrderType::Premium } else { OrderType::Regular },
+            residual_payment: residual, // New field
+        }
+    }
+
+    pub fn immediate_payout(&self) -> u8 {
+        self.payout
+    }
+    
+    pub fn residual_payment(&self) -> u8 {
+        self.residual_payment
+    }    
 }
 
 #[derive(Component)]
@@ -628,6 +755,24 @@ impl ActionSpaceSlot {
             5..=6 => position <= 2,  // All three spaces
             _ => true,
         }
+    }
+
+    pub fn place_grande_on_occupied(&mut self, player_id: PlayerId) -> bool {
+        // Grande worker can be placed even if space is occupied
+        if self.occupied_by.is_some() {
+            // Place on the action art/center, not on a specific slot
+            true
+        } else {
+            // Place normally if space is free
+            self.occupied_by = Some(player_id);
+            true
+        }
+    }
+    
+    pub fn has_grande_worker(&self, player_id: PlayerId) -> bool {
+        // Check if this player has a grande worker here
+        // In the actual game, we'd track this separately
+        self.bonus_worker_slot == Some(player_id)
     }    
 }
 
@@ -970,7 +1115,7 @@ pub struct AnimatedText {
     pub end_pos: Vec2,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Structure {
     pub structure_type: StructureType,
     pub owner: PlayerId,
@@ -993,3 +1138,24 @@ pub struct GameStatusText;
 
 #[derive(Component)]
 pub struct MarkedForDespawn;
+
+#[derive(Component)]
+pub struct ResidualPaymentTracker {
+    pub owner: PlayerId,
+    pub level: u8, // 0-5, corresponds to lira earned each year
+}
+
+impl ResidualPaymentTracker {
+    pub fn new(owner: PlayerId) -> Self {
+        Self { owner, level: 0 }
+    }
+    
+    pub fn advance(&mut self, steps: u8) {
+        self.level = (self.level + steps).min(5);
+    }
+    
+    pub fn annual_income(&self) -> u8 {
+        self.level
+    }
+}
+

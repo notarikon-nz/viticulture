@@ -2,73 +2,37 @@
   "players": [
     {
       "id": 0,
-      "name": "AI Player 1",
-      "victory_points": 0,
-      "lira": 9,
-      "workers": 3,
+      "name": "Player 1",
+      "victory_points": 1,
+      "lira": 15,
+      "workers": 2,
       "grande_worker_available": true,
-      "is_ai": true
+      "is_ai": false
     },
     {
       "id": 1,
       "name": "AI Player 2",
-      "victory_points": 1,
+      "victory_points": 0,
       "lira": 5,
-      "workers": 2,
-      "grande_worker_available": true,
-      "is_ai": true
-    },
-    {
-      "id": 2,
-      "name": "AI Player 3",
-      "victory_points": 1,
-      "lira": 6,
-      "workers": 2,
-      "grande_worker_available": true,
-      "is_ai": true
-    },
-    {
-      "id": 3,
-      "name": "AI Player 4",
-      "victory_points": 2,
-      "lira": 7,
       "workers": 2,
       "grande_worker_available": true,
       "is_ai": true
     },
     {
       "id": 0,
-      "name": "AI Player 1",
-      "victory_points": 1,
-      "lira": 7,
+      "name": "Player 1",
+      "victory_points": 0,
+      "lira": 5,
       "workers": 2,
       "grande_worker_available": true,
-      "is_ai": true
+      "is_ai": false
     },
     {
       "id": 1,
       "name": "AI Player 2",
-      "victory_points": 1,
+      "victory_points": 2,
       "lira": 6,
       "workers": 2,
-      "grande_worker_available": true,
-      "is_ai": true
-    },
-    {
-      "id": 2,
-      "name": "AI Player 3",
-      "victory_points": 2,
-      "lira": 4,
-      "workers": 2,
-      "grande_worker_available": true,
-      "is_ai": true
-    },
-    {
-      "id": 3,
-      "name": "AI Player 4",
-      "victory_points": 0,
-      "lira": 5,
-      "workers": 3,
       "grande_worker_available": true,
       "is_ai": true
     }
@@ -78,10 +42,7 @@
       "owner_id": 0,
       "fields": [
         {
-          "vine": {
-            "is_red": true,
-            "value": 2
-          },
+          "vine": null,
           "field_type": 0,
           "sold_this_year": false
         },
@@ -128,9 +89,9 @@
       ],
       "red_grapes": 0,
       "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 2
+      "red_wine": 2,
+      "white_wine": 2,
+      "lira": 3
     },
     {
       "owner_id": 1,
@@ -181,121 +142,11 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
+      "red_grapes": 2,
+      "white_grapes": 2,
+      "red_wine": 2,
+      "white_wine": 2,
       "lira": 5
-    },
-    {
-      "owner_id": 2,
-      "fields": [
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 2,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        }
-      ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 6
-    },
-    {
-      "owner_id": 3,
-      "fields": [
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 2,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        }
-      ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 7
     },
     {
       "owner_id": 0,
@@ -346,11 +197,11 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 7
+      "red_grapes": 1,
+      "white_grapes": 1,
+      "red_wine": 1,
+      "white_wine": 1,
+      "lira": 5
     },
     {
       "owner_id": 1,
@@ -397,135 +248,20 @@
         },
         {
           "vine": null,
-          "field_type": 0,
+          "field_type": 1,
           "sold_this_year": false
         }
       ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
+      "red_grapes": 1,
+      "white_grapes": 1,
+      "red_wine": 1,
+      "white_wine": 1,
       "lira": 6
-    },
-    {
-      "owner_id": 2,
-      "fields": [
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 2,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        }
-      ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 4
-    },
-    {
-      "owner_id": 3,
-      "fields": [
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 1,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 2,
-          "sold_this_year": false
-        },
-        {
-          "vine": null,
-          "field_type": 0,
-          "sold_this_year": false
-        }
-      ],
-      "red_grapes": 0,
-      "white_grapes": 0,
-      "red_wine": 0,
-      "white_wine": 0,
-      "lira": 5
     }
   ],
   "hands": [
     {
       "owner_id": 0,
-      "vine_cards": [],
-      "wine_order_cards": []
-    },
-    {
-      "owner_id": 1,
       "vine_cards": [
         {
           "id": 29,
@@ -536,17 +272,22 @@
           "cost": 3,
           "art_style": 5,
           "special_ability": null
+        },
+        {
+          "id": 26,
+          "vine_type": {
+            "is_red": true,
+            "value": 4
+          },
+          "cost": 3,
+          "art_style": 2,
+          "special_ability": null
         }
       ],
       "wine_order_cards": []
     },
     {
-      "owner_id": 2,
-      "vine_cards": [],
-      "wine_order_cards": []
-    },
-    {
-      "owner_id": 3,
+      "owner_id": 1,
       "vine_cards": [
         {
           "id": 28,
@@ -581,40 +322,16 @@
       "owner_id": 1,
       "vine_cards": [],
       "wine_order_cards": []
-    },
-    {
-      "owner_id": 2,
-      "vine_cards": [
-        {
-          "id": 26,
-          "vine_type": {
-            "is_red": true,
-            "value": 4
-          },
-          "cost": 3,
-          "art_style": 2,
-          "special_ability": null
-        },
-        {
-          "id": 25,
-          "vine_type": {
-            "is_red": false,
-            "value": 3
-          },
-          "cost": 2,
-          "art_style": 1,
-          "special_ability": null
-        }
-      ],
-      "wine_order_cards": []
-    },
-    {
-      "owner_id": 3,
-      "vine_cards": [],
-      "wine_order_cards": []
     }
   ],
   "workers": [
+    {
+      "owner_id": 0,
+      "is_grande": false,
+      "placed_at": 3,
+      "position_x": -300.0,
+      "position_y": -50.0
+    },
     {
       "owner_id": 0,
       "is_grande": false,
@@ -624,20 +341,6 @@
     },
     {
       "owner_id": 0,
-      "is_grande": false,
-      "placed_at": 1,
-      "position_x": -300.0,
-      "position_y": 50.0
-    },
-    {
-      "owner_id": 0,
-      "is_grande": false,
-      "placed_at": 4,
-      "position_x": -300.0,
-      "position_y": -100.0
-    },
-    {
-      "owner_id": 0,
       "is_grande": true,
       "placed_at": 3,
       "position_x": -300.0,
@@ -665,69 +368,27 @@
       "position_y": -170.0
     },
     {
-      "owner_id": 2,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -200.0
-    },
-    {
-      "owner_id": 2,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 2,
-      "is_grande": true,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -200.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": true,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -170.0
-    },
-    {
       "owner_id": 0,
       "is_grande": false,
-      "placed_at": 3,
-      "position_x": -300.0,
-      "position_y": -50.0
-    },
-    {
-      "owner_id": 0,
-      "is_grande": false,
-      "placed_at": 1,
-      "position_x": -300.0,
-      "position_y": 50.0
-    },
-    {
-      "owner_id": 0,
-      "is_grande": true,
       "placed_at": 2,
       "position_x": -300.0,
       "position_y": 0.0
     },
     {
+      "owner_id": 0,
+      "is_grande": false,
+      "placed_at": 2,
+      "position_x": -300.0,
+      "position_y": 0.0
+    },
+    {
+      "owner_id": 0,
+      "is_grande": true,
+      "placed_at": 4,
+      "position_x": -300.0,
+      "position_y": -100.0
+    },
+    {
       "owner_id": 1,
       "is_grande": false,
       "placed_at": null,
@@ -746,74 +407,23 @@
       "is_grande": true,
       "placed_at": null,
       "position_x": -380.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 2,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -200.0
-    },
-    {
-      "owner_id": 2,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 2,
-      "is_grande": true,
-      "placed_at": null,
-      "position_x": -260.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -200.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -170.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -140.0
-    },
-    {
-      "owner_id": 3,
-      "is_grande": true,
-      "placed_at": null,
-      "position_x": -140.0,
       "position_y": -170.0
     }
   ],
   "turn_order": {
     "players": [
       0,
-      1,
-      2,
-      3
+      1
     ],
     "current_player": 0,
     "wake_up_order": []
   },
   "config": {
-    "player_count": 4,
+    "player_count": 2,
     "target_victory_points": 20,
     "current_year": 1,
     "max_years": 7,
-    "ai_count": 4
+    "ai_count": 1
   },
   "current_state": 3,
   "action_spaces": [
@@ -824,7 +434,7 @@
     },
     {
       "action": 1,
-      "occupied_by": 0,
+      "occupied_by": null,
       "bonus_worker_slot": null
     },
     {
@@ -874,12 +484,12 @@
     },
     {
       "action": 1,
-      "occupied_by": 0,
+      "occupied_by": null,
       "bonus_worker_slot": null
     },
     {
       "action": 2,
-      "occupied_by": null,
+      "occupied_by": 0,
       "bonus_worker_slot": null
     },
     {
