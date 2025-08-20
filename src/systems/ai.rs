@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::components::*;
+use crate::systems::*;
 use crate::systems::audio::*;
 use crate::systems::game_logic::execute_action;
 use rand::prelude::*;
@@ -54,6 +55,7 @@ pub fn ai_decision_system(
     current_state: Res<State<GameState>>,
     audio_assets: Res<AudioAssets>,
     audio_settings: Res<AudioSettings>,
+    animation_settings: Res<AnimationSettings>,
 ) {
     if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
         return;
@@ -92,6 +94,7 @@ pub fn ai_decision_system(
                         &mut commands,
                         &audio_assets,
                         &audio_settings,
+                        &animation_settings,
                     );
                 }
             }
@@ -229,6 +232,7 @@ fn execute_ai_action(
     commands: &mut Commands,
     audio_assets: &Res<AudioAssets>,    // Fixed: removed mut
     audio_settings: &Res<AudioSettings>, // Fixed: removed mut
+    animation_settings: &Res<AnimationSettings>,
 ) {
     // Find and place a worker
     let mut worker_placed = false;
@@ -273,7 +277,7 @@ fn execute_ai_action(
     }
     
     if worker_placed {
-        execute_action(action, player_id, hands, vineyards, players, card_decks, commands, audio_assets, audio_settings);
+        execute_action(action, player_id, hands, vineyards, players, card_decks, commands, audio_assets, audio_settings, animation_settings);
         info!("AI Player {:?} executed action {:?}", player_id, action);
     }
 }

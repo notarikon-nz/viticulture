@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::components::*;
+use crate::systems::*;
 use crate::systems::game_logic::*;
 use crate::systems::audio::*;
 
@@ -20,6 +21,7 @@ pub fn mouse_input_system(
     current_state: Res<State<GameState>>,
     audio_assets: Res<AudioAssets>,
     audio_settings: Res<AudioSettings>,
+    animation_settings: Res<AnimationSettings>,
 ) {
     if !mouse_input.just_pressed(MouseButton::Left) {
         return;
@@ -36,55 +38,67 @@ pub fn mouse_input_system(
                 let bounds = Rect::from_center_size(action_space.position, clickable.size);
                 
                 if bounds.contains(world_pos) {
-                    // Check if regular worker can be placed
                     let can_place_regular = action_space.can_place_worker(*current_player_id, current_state.get());
-                    // Check if grande worker can be placed (can bypass restrictions)
                     let can_place_grande = action_space.can_place_grande_worker(*current_player_id, current_state.get());
                     
                     if can_place_regular || can_place_grande {
-                        // Find available worker (prefer regular, then grande)
                         let mut selected_worker = None;
                         
                         if can_place_regular {
-                            // Look for regular worker first
                             for (worker_entity, worker, _) in workers.iter() {
                                 if worker.owner == *current_player_id && worker.placed_at.is_none() && !worker.is_grande {
-                                    selected_worker = Some((worker_entity, false));
+                                    selected_worker = Some((worker_entity, false, worker.position));
                                     break;
                                 }
                             }
                         }
                         
-                        // If no regular worker available but grande can be placed, use grande
                         if selected_worker.is_none() && can_place_grande {
                             for (worker_entity, worker, _) in workers.iter() {
                                 if worker.owner == *current_player_id && worker.placed_at.is_none() && worker.is_grande {
-                                    selected_worker = Some((worker_entity, true));
+                                    selected_worker = Some((worker_entity, true, worker.position));
                                     break;
                                 }
                             }
                         }
                         
-                        if let Some((worker_entity, is_grande)) = selected_worker {
-                            // Place the worker
+                        if let Some((worker_entity, is_grande, start_pos)) = selected_worker {
+                            // Animate worker movement
+                            animate_worker_placement(
+                                &mut commands,
+                                worker_entity,
+                                start_pos,
+                                action_space.position,
+                                WorkerAnimationType::Placement,
+                                &animation_settings,
+                            );
+                            
+                            // Update worker state
                             for (w_entity, mut worker, _) in workers.iter_mut() {
                                 if w_entity == worker_entity {
                                     worker.placed_at = Some(action_space.action);
-                                    worker.position = action_space.position;
+                                    // Position will be updated by animation
                                     
-                                    // Handle space occupation
                                     if is_grande && action_space.occupied_by.is_some() {
-                                        // Grande worker uses bonus slot
                                         action_space.bonus_worker_slot = Some(*current_player_id);
                                     } else {
-                                        // Regular placement
                                         action_space.occupied_by = Some(*current_player_id);
                                     }
                                     
-                                    // Play worker placement sound
-                                    play_sfx(&mut commands, &audio_assets, &audio_settings, AudioType::WorkerPlace);
+                                    crate::systems::audio::play_sfx(&mut commands, &audio_assets, &audio_settings, AudioType::WorkerPlace);
                                     
-                                    execute_action(action_space.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &audio_assets, &audio_settings);
+                                    execute_action(
+                                        action_space.action, 
+                                        *current_player_id, 
+                                        &mut hands, 
+                                        &mut vineyards, 
+                                        &mut players, 
+                                        &mut card_decks, 
+                                        &mut commands, 
+                                        &audio_assets, 
+                                        &audio_settings,
+                                        &animation_settings,
+                                    );
                                     
                                     info!("Player {:?} placed {} worker on {:?}", 
                                           current_player_id, 
@@ -114,7 +128,8 @@ pub fn ui_button_system(
     turn_order: Res<TurnOrder>,
     current_state: Res<State<GameState>>,
     audio_assets: Res<AudioAssets>,
-    audio_settings: Res<AudioSettings>,    
+    audio_settings: Res<AudioSettings>,
+    animation_settings: Res<AnimationSettings>,
 ) {
     for (interaction, action_button, mut color) in &mut interaction_query {
         match *interaction {
@@ -144,7 +159,7 @@ pub fn ui_button_system(
                             }
                         }
                         
-                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &audio_assets, &audio_settings);
+                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &audio_assets, &audio_settings, &animation_settings);
                         
                         for mut space in action_spaces.iter_mut() {
                             if space.action == action_button.action {

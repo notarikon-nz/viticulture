@@ -37,6 +37,7 @@ fn main() {
         .insert_resource(AutoTestConfig::default())
         .insert_resource(SaveManager::default())
         .insert_resource(UndoSystem::default())
+        .insert_resource(AnimationSettings::default())
         // Expansion resources (create them conditionally)
         .insert_resource(ExpansionSettings::default())
         .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin)
