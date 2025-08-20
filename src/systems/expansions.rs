@@ -214,7 +214,7 @@ pub fn setup_tuscany_expansion_system(
 }
 
 pub fn handle_visitor_cards_system(
-    mut visitor_deck: ResMut<VisitorDeck>,
+    visitor_deck: Option<ResMut<VisitorDeck>>,
     mut hands: Query<&mut Hand>,
     mut players: Query<&mut Player>,
     mut vineyards: Query<&mut Vineyard>,
@@ -223,9 +223,14 @@ pub fn handle_visitor_cards_system(
     current_state: Res<State<GameState>>,
     expansion_settings: Res<ExpansionSettings>,
 ) {
+    // Early return if expansion not enabled or resource not available
     if !expansion_settings.visitor_cards_enabled {
         return;
     }
+    
+    let Some(mut visitor_deck) = visitor_deck else {
+        return; // Resource not available, skip system
+    };
     
     // Draw visitor card with V key
     if keyboard.just_pressed(KeyCode::KeyV) {

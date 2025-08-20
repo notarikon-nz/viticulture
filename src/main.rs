@@ -21,19 +21,23 @@ fn main() {
             )
         )
         .init_state::<GameState>()
+        // Core game resources
         .insert_resource(TurnOrder::default())
         .insert_resource(GameConfig::default())
         .insert_resource(GameSettings::default())
         .insert_resource(CardDecks::new())
         .insert_resource(AISettings::default())
         .insert_resource(GameValidation::default())
+        // Performance resources
         .insert_resource(PerformanceSettings::default())
         .insert_resource(FrameCache::default())
+        // Game state resources
         .insert_resource(EndGameScoring::default())
         .insert_resource(BalanceTestResults::default())
         .insert_resource(AutoTestConfig::default())
         .insert_resource(SaveManager::default())
         .insert_resource(UndoSystem::default())
+        // Expansion resources (create them conditionally)
         .insert_resource(ExpansionSettings::default())
         .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin)
         .add_systems(Startup, (
@@ -44,6 +48,9 @@ fn main() {
             initialize_session_system,
             setup_tooltips_system,
             initialize_expansion_content_system,
+            initialize_achievements_system,
+            initialize_onboarding_system,
+            initialize_tutorial_system,
         ))
         .add_systems(
             Update, (

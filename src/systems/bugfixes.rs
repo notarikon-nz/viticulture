@@ -6,7 +6,13 @@ pub fn fix_worker_state_system(
     mut workers: Query<&mut Worker>,
     action_spaces: Query<&ActionSpaceSlot>,
     turn_order: Res<TurnOrder>,
+    current_state: Res<State<GameState>>,
 ) {
+    // Only run during active gameplay, not in menu or setup
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
+        return;
+    }
+    
     // Fix workers that are placed but space is no longer occupied
     for mut worker in workers.iter_mut() {
         if let Some(placed_action) = worker.placed_at {
@@ -16,7 +22,6 @@ pub fn fix_worker_state_system(
                       space.bonus_worker_slot == Some(worker.owner)));
             
             if !space_still_occupied {
-                warn!("Fixed orphaned worker for player {:?}", worker.owner);
                 worker.placed_at = None;
                 // Reset worker position
                 let player_id = worker.owner.0;
@@ -29,13 +34,17 @@ pub fn fix_worker_state_system(
 
 pub fn fix_card_deck_system(
     mut card_decks: ResMut<CardDecks>,
+    current_state: Res<State<GameState>>,
 ) {
+    // Only check decks during active gameplay
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter | GameState::Spring) {
+        return;
+    }
 
     let mut card_decks_clone = card_decks.clone();
 
     // Prevent empty deck issues by reshuffling discard pile
     if card_decks.vine_deck.is_empty() && !card_decks.vine_discard.is_empty() {
-        info!("Reshuffling vine discard pile into deck");
         card_decks.vine_deck.append(&mut card_decks_clone.vine_discard);
         
         // Shuffle the deck
@@ -47,7 +56,6 @@ pub fn fix_card_deck_system(
     let mut card_decks_clone_again = card_decks.clone();
 
     if card_decks.wine_order_deck.is_empty() && !card_decks.wine_order_discard.is_empty() {
-        info!("Reshuffling wine order discard pile into deck");
         card_decks.wine_order_deck.append(&mut card_decks_clone_again.wine_order_discard);
         
         use rand::seq::SliceRandom;
@@ -59,7 +67,13 @@ pub fn fix_card_deck_system(
 pub fn fix_resource_overflow_system(
     mut players: Query<&mut Player>,
     mut vineyards: Query<&mut Vineyard>,
+    current_state: Res<State<GameState>>,
 ) {
+    // Only run during active gameplay
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter | GameState::Fall) {
+        return;
+    }
+    
     // Prevent resource overflow and underflow
     for mut player in players.iter_mut() {
         player.victory_points = player.victory_points.min(99); // Cap at 99 VP
@@ -80,12 +94,28 @@ pub fn fix_resource_overflow_system(
 pub fn fix_turn_order_system(
     mut turn_order: ResMut<TurnOrder>,
     players: Query<&Player>,
+    current_state: Res<State<GameState>>,
+    time: Res<Time>,
 ) {
+    // Only run during active gameplay and limit frequency
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
+        return;
+    }
+    
+    // Only check every 2 seconds to reduce spam
+    if time.elapsed_seconds() % 2.0 > 0.1 {
+        return;
+    }
+    
     let player_count = players.iter().count();
+    
+    // Skip validation if no players yet (during setup)
+    if player_count == 0 {
+        return;
+    }
     
     // Fix out-of-bounds current player
     if turn_order.current_player >= player_count {
-        warn!("Fixed out-of-bounds current player index");
         turn_order.current_player = 0;
     }
     
@@ -93,8 +123,7 @@ pub fn fix_turn_order_system(
     let existing_players: std::collections::HashSet<_> = turn_order.players.iter().collect();
     let all_players: std::collections::HashSet<_> = players.iter().map(|p| &p.id).collect();
     
-    if existing_players != all_players {
-        warn!("Fixed mismatched turn order players");
+    if existing_players != all_players && player_count > 0 {
         turn_order.players = players.iter().map(|p| p.id).collect();
     }
 }
@@ -102,7 +131,13 @@ pub fn fix_turn_order_system(
 pub fn fix_action_space_consistency_system(
     mut action_spaces: Query<&mut ActionSpaceSlot>,
     workers: Query<&Worker>,
+    current_state: Res<State<GameState>>,
 ) {
+    // Only run during active gameplay
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
+        return;
+    }
+    
     // Fix action spaces that claim to be occupied but have no worker
     for mut space in action_spaces.iter_mut() {
         if let Some(occupying_player) = space.occupied_by {
@@ -110,7 +145,6 @@ pub fn fix_action_space_consistency_system(
                 .any(|w| w.owner == occupying_player && w.placed_at == Some(space.action));
             
             if !worker_present {
-                warn!("Fixed ghost occupation on action space {:?}", space.action);
                 space.occupied_by = None;
             }
         }
@@ -120,7 +154,6 @@ pub fn fix_action_space_consistency_system(
                 .any(|w| w.owner == bonus_player && w.is_grande && w.placed_at == Some(space.action));
             
             if !grande_worker_present {
-                warn!("Fixed ghost bonus occupation on action space {:?}", space.action);
                 space.bonus_worker_slot = None;
             }
         }
@@ -133,11 +166,28 @@ pub fn validate_game_state_system(
     hands: Query<&Hand>,
     workers: Query<&Worker>,
     config: Res<GameConfig>,
+    current_state: Res<State<GameState>>,
+    time: Res<Time>,
 ) {
+    // Only run during active gameplay and limit frequency to once every 5 seconds
+    if !matches!(current_state.get(), GameState::Summer | GameState::Winter | GameState::Fall) {
+        return;
+    }
+    
+    // Limit validation frequency to reduce spam
+    if time.elapsed_seconds() % 5.0 > 0.1 {
+        return;
+    }
+    
     // Basic sanity checks
     let player_count = players.iter().count();
     let vineyard_count = vineyards.iter().count();
     let hand_count = hands.iter().count();
+    
+    // Skip validation during setup when entities haven't been created yet
+    if player_count == 0 || vineyard_count == 0 || hand_count == 0 {
+        return;
+    }
     
     if player_count != vineyard_count || player_count != hand_count {
         error!("Mismatched component counts: {} players, {} vineyards, {} hands", 
@@ -176,95 +226,4 @@ pub fn emergency_recovery_system(
         
         next_state.set(GameState::MainMenu);
     }
-    
-    // Auto-recovery for stuck states
-    if matches!(current_state.get(), GameState::Setup | GameState::Spring | GameState::Fall) {
-        // Add timeout logic here if needed
-    }
-}
-
-// Improved validation with better error handling
-pub fn enhanced_action_validation(
-    player_id: PlayerId,
-    action: ActionSpace,
-    workers: &Query<&Worker>,
-    vineyards: &Query<&Vineyard>,
-    hands: &Query<&Hand>,
-    players: &Query<&Player>,
-) -> Result<(), String> {
-    // Check if player exists
-    let player = players.iter().find(|p| p.id == player_id)
-        .ok_or("Player not found")?;
-    
-    let vineyard = vineyards.iter().find(|v| v.owner == player_id)
-        .ok_or("Vineyard not found")?;
-    
-    let hand = hands.iter().find(|h| h.owner == player_id)
-        .ok_or("Hand not found")?;
-    
-    // Check worker availability
-    let available_workers = workers.iter()
-        .filter(|w| w.owner == player_id && w.placed_at.is_none())
-        .count();
-    
-    if available_workers == 0 {
-        return Err("No available workers".to_string());
-    }
-    
-    // Action-specific validation
-    match action {
-        ActionSpace::PlantVine => {
-            if hand.vine_cards.is_empty() {
-                return Err("No vine cards to plant".to_string());
-            }
-            if vineyard.lira == 0 {
-                return Err("Not enough lira".to_string());
-            }
-            let empty_fields = vineyard.fields.iter().filter(|f| f.is_none()).count();
-            if empty_fields == 0 {
-                return Err("No empty fields".to_string());
-            }
-        }
-        ActionSpace::FillOrder => {
-            if hand.wine_order_cards.is_empty() {
-                return Err("No wine orders".to_string());
-            }
-            let can_fulfill = hand.wine_order_cards.iter()
-                .any(|order| vineyard.can_fulfill_order(order));
-            if !can_fulfill {
-                return Err("Cannot fulfill any orders".to_string());
-            }
-        }
-        ActionSpace::TrainWorker => {
-            if vineyard.lira < 4 {
-                return Err("Need 4 lira to train worker".to_string());
-            }
-        }
-        ActionSpace::MakeWine => {
-            let total_grapes = vineyard.red_grapes + vineyard.white_grapes;
-            if total_grapes == 0 {
-                return Err("No grapes to make wine".to_string());
-            }
-        }
-        ActionSpace::Harvest => {
-            let planted_vines = vineyard.fields.iter().filter(|f| f.is_some()).count();
-            if planted_vines == 0 {
-                return Err("No vines planted".to_string());
-            }
-        }
-        ActionSpace::SellGrapes => {
-            let total_grapes = vineyard.red_grapes + vineyard.white_grapes;
-            if total_grapes == 0 {
-                return Err("No grapes to sell".to_string());
-            }
-        }
-        ActionSpace::BuildStructure => {
-            if vineyard.lira < 2 {
-                return Err("Need at least 2 lira".to_string());
-            }
-        }
-        _ => {} // Other actions have no prerequisites
-    }
-    
-    Ok(())
 }
