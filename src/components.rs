@@ -417,7 +417,7 @@ impl WineOrderCard {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct CardDecks {
     pub vine_deck: Vec<VineCard>,
     pub wine_order_deck: Vec<WineOrderCard>,
@@ -531,6 +531,27 @@ pub struct GameAssets {
     pub vine_card_texture: Handle<Image>,
     pub wine_order_card_texture: Handle<Image>,
     pub field_texture: Handle<Image>,
+}
+
+#[derive(Resource)]
+pub struct GameSettings {
+    pub ai_enabled: bool,
+    pub ai_difficulty: u8, // 1 = Beginner, 2 = Intermediate
+    pub audio_enabled: bool,
+    pub sfx_volume: f32,
+    pub music_volume: f32,
+}
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            ai_enabled: true,
+            ai_difficulty: 1,
+            audio_enabled: true,
+            sfx_volume: 0.7,
+            music_volume: 0.3,
+        }
+    }
 }
 
 #[derive(Component)]

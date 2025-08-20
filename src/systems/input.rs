@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use crate::components::*;
 use crate::systems::game_logic::*;
+use crate::systems::audio::*;
+use crate::systems::validation::*;
 
 const GREY: Srgba = Srgba::new(0.6, 0.6, 0.6, 1.0);
 
@@ -17,6 +19,9 @@ pub fn mouse_input_system(
     mut commands: Commands,
     turn_order: Res<TurnOrder>,
     current_state: Res<State<GameState>>,
+    audio_assets: Res<AudioAssets>,
+    audio_settings: Res<AudioSettings>,
+    validation: Res<GameValidation>,
 ) {
     if !mouse_input.just_pressed(MouseButton::Left) {
         return;
@@ -33,6 +38,42 @@ pub fn mouse_input_system(
                 let bounds = Rect::from_center_size(action_space.position, clickable.size);
                 
                 if bounds.contains(world_pos) {
+                    // Validate worker placement
+                    let validation_result = validate_worker_placement(
+                        *current_player_id,
+                        action_space.action,
+                        &workers,
+                        &action_spaces,
+                        current_state.get(),
+                        &validation,
+                    );
+                    
+                    if !validation_result.is_valid() {
+                        if let Some(error_msg) = validation_result.error_message() {
+                            info!("Invalid move: {}", error_msg);
+                            play_sfx(&mut commands, &audio_assets, &audio_settings, AudioType::Error);
+                        }
+                        continue;
+                    }
+                    
+                    // Validate action requirements
+                    let action_validation = validate_action_requirements(
+                        *current_player_id,
+                        action_space.action,
+                        &players,
+                        &hands,
+                        &vineyards,
+                        &validation,
+                    );
+                    
+                    if !action_validation.is_valid() {
+                        if let Some(error_msg) = action_validation.error_message() {
+                            info!("Action not possible: {}", error_msg);
+                            play_sfx(&mut commands, &audio_assets, &audio_settings, AudioType::Error);
+                        }
+                        continue;
+                    }
+                    
                     // Check if regular worker can be placed
                     let can_place_regular = action_space.can_place_worker(*current_player_id, current_state.get());
                     // Check if grande worker can be placed (can bypass restrictions)
@@ -78,7 +119,10 @@ pub fn mouse_input_system(
                                         action_space.occupied_by = Some(*current_player_id);
                                     }
                                     
-                                    execute_action(action_space.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands);
+                                    // Play worker placement sound
+                                    play_sfx(&mut commands, &audio_assets, &audio_settings, AudioType::WorkerPlace);
+                                    
+                                    execute_action(action_space.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &audio_assets, &audio_settings);
                                     
                                     info!("Player {:?} placed {} worker on {:?}", 
                                           current_player_id, 
@@ -107,6 +151,8 @@ pub fn ui_button_system(
     mut commands: Commands,
     turn_order: Res<TurnOrder>,
     current_state: Res<State<GameState>>,
+    mut audio_assets: &Res<AudioAssets>,
+    mut audio_settings: &Res<AudioSettings>,    
 ) {
     for (interaction, action_button, mut color) in &mut interaction_query {
         match *interaction {
@@ -136,7 +182,7 @@ pub fn ui_button_system(
                             }
                         }
                         
-                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands);
+                        execute_action(action_button.action, *current_player_id, &mut hands, &mut vineyards, &mut players, &mut card_decks, &mut commands, &mut audio_assets, &mut audio_settings);
                         
                         for mut space in action_spaces.iter_mut() {
                             if space.action == action_button.action {

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::components::*;
+use crate::systems::*;
 use crate::systems::ui::setup_ui;
 use crate::systems::animations::spawn_animated_text;
 
@@ -122,6 +123,8 @@ pub fn execute_action(
     players: &mut Query<&mut Player>,
     card_decks: &mut ResMut<CardDecks>,
     commands: &mut Commands,
+    audio_assets: &Res<AudioAssets>,
+    audio_settings: &Res<AudioSettings>,
 ) {
     let mut hand = hands.iter_mut().find(|h| h.owner == player_id);
     let mut vineyard = vineyards.iter_mut().find(|v| v.owner == player_id);
@@ -131,12 +134,14 @@ pub fn execute_action(
         ActionSpace::DrawVine => {
             if let (Some(mut hand), Some(card)) = (hand.as_mut(), card_decks.draw_vine_card()) {
                 hand.vine_cards.push(card);
+                play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
                 spawn_animated_text(commands, player_id, "+Vine", Color::from(Srgba::new(0.2, 0.8, 0.2, 1.0)));
             }
         }
         ActionSpace::DrawWineOrder => {
             if let (Some(mut hand), Some(card)) = (hand.as_mut(), card_decks.draw_wine_order_card()) {
                 hand.wine_order_cards.push(card);
+                play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
                 spawn_animated_text(commands, player_id, "+Order", Color::from(Srgba::new(0.6, 0.2, 0.8, 1.0)));
             }
         }
@@ -170,6 +175,7 @@ pub fn execute_action(
                 let structures = Vec::new();
                 let gained = vineyard.harvest_grapes(&structures);
                 if gained > 0 {
+                    play_sfx(commands, audio_assets, audio_settings, AudioType::Harvest);
                     spawn_animated_text(commands, player_id, &format!("+{} Grapes", gained), Color::from(Srgba::new(0.8, 0.4, 0.8, 1.0)));
                 }
             }
@@ -185,12 +191,14 @@ pub fn execute_action(
                     vineyard.red_grapes -= 1;
                     vineyard.white_grapes -= 1;
                     vineyard.red_wine += 2; // Sparkling wine stored as red wine for simplicity
+                    play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
                     spawn_animated_text(commands, player_id, "+Sparkling Wine", Color::from(Srgba::new(0.9, 0.7, 0.2, 1.0)));
                 } else if red_available >= 1 && white_available >= 1 {
                     // Make blush wine (1 red + 1 white = 1 blush)
                     vineyard.red_grapes -= 1;
                     vineyard.white_grapes -= 1;
                     vineyard.white_wine += 1; // Blush stored as white wine for simplicity
+                    play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
                     spawn_animated_text(commands, player_id, "+Blush Wine", Color::from(Srgba::new(0.9, 0.5, 0.6, 1.0)));
                 } else {
                     // Regular wine making
@@ -200,6 +208,7 @@ pub fn execute_action(
                     if vineyard.make_wine(red_to_use, white_to_use) {
                         let total_wine = red_to_use + white_to_use;
                         if total_wine > 0 {
+                            play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
                             spawn_animated_text(commands, player_id, &format!("+{} Wine", total_wine), Color::from(Srgba::new(0.7, 0.2, 0.2, 1.0)));
                         }
                     }
@@ -215,8 +224,10 @@ pub fn execute_action(
                         vineyard.fulfill_order(&order);
                         player.gain_victory_points(order.victory_points);
                         player.gain_lira(order.payout);
+                        play_sfx(commands, audio_assets, audio_settings, AudioType::VictoryPoint);
                         spawn_animated_text(commands, player_id, &format!("+{} VP", order.victory_points), Color::from(YELLOW));
                         if order.payout > 0 {
+                            play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
                             spawn_animated_text(commands, player_id, &format!("+{} Lira", order.payout), Color::from(GOLD));
                         }
                     }
@@ -229,6 +240,7 @@ pub fn execute_action(
                 // Check for Tasting Room structure bonus
                 // TODO: Query actual structures when implemented
                 player.gain_lira(bonus_lira);
+                play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
                 spawn_animated_text(commands, player_id, &format!("+{} Lira", bonus_lira), Color::from(GOLD));
             }
         }
@@ -239,6 +251,7 @@ pub fn execute_action(
                     player.gain_lira(grapes_sold);
                     vineyard.red_grapes = 0;
                     vineyard.white_grapes = 0;
+                    play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
                     spawn_animated_text(commands, player_id, &format!("+{} Lira", grapes_sold), Color::from(GOLD));
                 }
             }
