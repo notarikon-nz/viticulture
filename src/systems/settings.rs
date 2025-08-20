@@ -355,6 +355,8 @@ pub fn handle_settings_interaction_system(
     existing_settings: Query<Entity, With<SettingsPanel>>,
     mut audio_settings: ResMut<AudioSettings>,
 ) {
+    let mut should_refresh = false;
+    let mut should_close = false;
 
     for (interaction, settings_button, mut color) in &mut interaction_query {
         match *interaction {
@@ -402,17 +404,16 @@ pub fn handle_settings_interaction_system(
                         audio_settings.music_volume = settings.music_volume;
                     }
                     SettingType::CloseSettings => {
-                        hide_settings_menu(&mut commands, existing_settings);
+                        should_close = true;
                     }
                 }
                 
                 // Save settings after any change
                 settings.save();
                 
-                // Refresh settings menu if still open
+                // Mark for refresh if not closing
                 if !matches!(settings_button.setting_type, SettingType::CloseSettings) {
-                    hide_settings_menu(&mut commands, existing_settings);
-                    show_settings_menu(&mut commands, &settings);
+                    should_refresh = true;
                 }
             }
             Interaction::Hovered => {
@@ -422,5 +423,13 @@ pub fn handle_settings_interaction_system(
                 *color = Color::from(Srgba::new(0.3, 0.3, 0.3, 1.0)).into();
             }
         }
+    }
+    
+    // Handle cleanup and refresh outside the loop
+    if should_close {
+        hide_settings_menu(&mut commands, existing_settings);
+    } else if should_refresh {
+        hide_settings_menu(&mut commands, existing_settings);
+        show_settings_menu(&mut commands, &settings);
     }
 }

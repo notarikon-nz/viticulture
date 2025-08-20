@@ -52,8 +52,8 @@ pub fn ai_decision_system(
     mut commands: Commands,
     turn_order: Res<TurnOrder>,
     current_state: Res<State<GameState>>,
-    mut audio_assets: &Res<AudioAssets>,
-    mut audio_settings: &Res<AudioSettings>,
+    audio_assets: Res<AudioAssets>,
+    audio_settings: Res<AudioSettings>,
 ) {
     if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
         return;
@@ -90,8 +90,8 @@ pub fn ai_decision_system(
                         &mut players,
                         &mut card_decks,
                         &mut commands,
-                        &mut audio_assets,
-                        &mut audio_settings,
+                        &audio_assets,
+                        &audio_settings,
                     );
                 }
             }
@@ -227,8 +227,8 @@ fn execute_ai_action(
     players: &mut Query<&mut Player>,
     card_decks: &mut ResMut<CardDecks>,
     commands: &mut Commands,
-    audio_assets: &Res<AudioAssets>,
-    audio_settings: &Res<AudioSettings>,    
+    audio_assets: &Res<AudioAssets>,    // Fixed: removed mut
+    audio_settings: &Res<AudioSettings>, // Fixed: removed mut
 ) {
     // Find and place a worker
     let mut worker_placed = false;

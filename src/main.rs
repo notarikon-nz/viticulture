@@ -61,6 +61,8 @@ fn main() {
                 culled_sprite_system,
                 animate_text_system,
                 ui_game_over_system,
+            ))
+        .add_systems(Update, (
                 // Persistence & QoL systems
                 save_game_system,
                 load_game_system,
@@ -73,6 +75,8 @@ fn main() {
                 create_snapshot_system,
                 undo_action_system,
                 display_undo_status_system,
+            ))
+        .add_systems(Update, (
                 // Expansion systems
                 setup_tuscany_expansion_system,
                 handle_visitor_cards_system,
@@ -86,6 +90,8 @@ fn main() {
                 contextual_help_system,
                 quick_reference_system,
                 card_tooltip_system,
+            ))
+        .add_systems(Update, (
                 // Bug fixes and maintenance
                 fix_worker_state_system,
                 fix_card_deck_system,
@@ -94,7 +100,9 @@ fn main() {
                 fix_action_space_consistency_system,
                 validate_game_state_system,
                 emergency_recovery_system,
-                // Balance testing
+             ))
+        .add_systems(Update, (
+               // Balance testing
                 auto_balance_test_system,
                 statistics::track_action_usage_system,
                 dynamic_difficulty_system,

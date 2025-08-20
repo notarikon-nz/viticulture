@@ -23,7 +23,7 @@ pub fn validate_worker_placement(
     workers: &Query<&Worker>,
     action_spaces: &Query<&ActionSpaceSlot>,
     current_state: &GameState,
-    validation: &Res<GameValidation>,
+    validation: &Res<GameValidation>, // Keep original signature
 ) -> ValidationResult {
     if !validation.enforce_rules {
         return ValidationResult::Valid;
@@ -74,7 +74,7 @@ pub fn validate_action_requirements(
     players: &Query<&Player>,
     hands: &Query<&Hand>,
     vineyards: &Query<&Vineyard>,
-    validation: &Res<GameValidation>,
+    validation: &Res<GameValidation>, // Keep original signature
 ) -> ValidationResult {
     if !validation.prevent_illegal_moves {
         return ValidationResult::Valid;

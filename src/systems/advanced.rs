@@ -286,7 +286,7 @@ pub struct GameContext {
 }
 
 // Expansion content manager
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct ExpansionContent {
     pub premium_wine_orders: Vec<WineOrderCard>,
     pub premium_vine_cards: Vec<VineCard>,
@@ -328,8 +328,11 @@ pub fn trigger_season_event_system(
             .filter(|event| event.season == *current_state.get())
             .collect();
         
-        if let Some(event) = matching_events.choose(&mut rng) {
-            expansion_content.current_event = Some(event.clone());
+        let mut expansion_content_clone = expansion_content.clone();
+        if !matching_events.is_empty() {
+            let random_index = rng.random_range(0..matching_events.len());
+            let event = &matching_events[random_index]; // Use indexing instead of choose
+            expansion_content_clone.current_event = Some((*event).clone());
             apply_season_event_effect(&event.effect, &mut players, &mut vineyards);
             info!("Season Event: {} - {}", event.name, event.description);
         }
