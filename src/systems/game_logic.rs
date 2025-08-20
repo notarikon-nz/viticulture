@@ -647,3 +647,184 @@ pub fn enhanced_make_wine_action(
         0
     }
 }
+
+
+// 3. Add aging system
+pub fn year_end_aging_system(
+    mut vineyards: Query<&mut Vineyard>,
+    current_state: Res<State<GameState>>,
+) {
+    if current_state.is_changed() && matches!(current_state.get(), GameState::Spring) {
+        for mut vineyard in vineyards.iter_mut() {
+            // Age grapes (max 9)
+            vineyard.red_grapes = (vineyard.red_grapes + 1).min(9);
+            vineyard.white_grapes = (vineyard.white_grapes + 1).min(9);
+            
+            // Age wines (max 9)
+            vineyard.red_wine = (vineyard.red_wine + 1).min(9);
+            vineyard.white_wine = (vineyard.white_wine + 1).min(9);
+        }
+    }
+}
+
+// 4. Add hand limit enforcement
+pub fn enforce_hand_limit_system(
+    mut hands: Query<&mut Hand>,
+    current_state: Res<State<GameState>>,
+) {
+    if current_state.is_changed() && matches!(current_state.get(), GameState::Spring) {
+        for mut hand in hands.iter_mut() {
+            let total_cards = hand.vine_cards.len() + hand.wine_order_cards.len();
+            if total_cards > 7 {
+                let excess = total_cards - 7;
+                // Simple implementation: remove vine cards first
+                for _ in 0..excess {
+                    if !hand.vine_cards.is_empty() {
+                        hand.vine_cards.remove(0);
+                    } else if !hand.wine_order_cards.is_empty() {
+                        hand.wine_order_cards.remove(0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 5. Add temporary worker support
+#[derive(Component)]
+pub struct TemporaryWorker {
+    pub owner: PlayerId,
+    pub expires_end_of_year: bool,
+}
+
+pub fn assign_temporary_worker_system(
+    mut commands: Commands,
+    turn_order: Res<TurnOrder>,
+    existing_temp: Query<Entity, With<TemporaryWorker>>,
+) {
+    // Clean up old temp workers
+    for entity in existing_temp.iter() {
+        commands.entity(entity).despawn();
+    }
+    
+    // Find player who chose position 7 (last wake-up)
+    if let Some((player_id, time)) = turn_order.wake_up_order.iter().find(|(_, t)| *t == 7) {
+        let worker_pos = Vec2::new(-500.0 + (player_id.0 as f32 * 120.0), -230.0);
+        commands.spawn((
+            Worker::new(*player_id, false, worker_pos),
+            TemporaryWorker { owner: *player_id, expires_end_of_year: true },
+            Clickable { size: Vec2::new(20.0, 20.0) },
+        ));
+    }
+}
+
+// 7. Add Fall phase for visitor cards
+pub fn fall_visitor_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut hands: Query<&mut Hand>,
+    mut card_decks: ResMut<CardDecks>,
+    turn_order: Res<TurnOrder>,
+    mut commands: Commands,
+    text_query: Query<Entity, (With<Text>, Without<UIPanel>)>,
+) {
+    if text_query.is_empty() {
+        commands.spawn(Text2dBundle {
+            text: Text::from_section(
+                "FALL PHASE\nEach player draws a visitor card\n\nPress SPACE to continue",
+                TextStyle {
+                    font_size: 24.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ),
+            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
+            ..default()
+        });
+        
+        // Each player draws a visitor card (simplified: give summer visitor)
+        for player_id in &turn_order.players {
+            if let Some(mut hand) = hands.iter_mut().find(|h| h.owner == *player_id) {
+                // Simplified: treat as vine card for now
+                if let Some(card) = card_decks.draw_vine_card() {
+                    hand.vine_cards.push(card);
+                }
+            }
+        }
+    }
+    
+    if keyboard.just_pressed(KeyCode::Space) {
+        for entity in text_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        next_state.set(GameState::Winter);
+    }
+}
+
+pub fn fall_draw_visitors_system(
+    mut hands: Query<&mut Hand>,
+    turn_order: Res<TurnOrder>,
+    structures: Query<&Structure>,
+    mut visitor_deck: Option<ResMut<VisitorDeck>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut commands: Commands,
+    text_query: Query<Entity, (With<Text>, Without<UIPanel>)>,
+    expansion_settings: Res<ExpansionSettings>,
+) {
+    // Only run if Tuscany expansion is enabled (where visitor cards exist)
+    if !expansion_settings.tuscany_enabled {
+        // Skip visitor cards, just advance to winter
+        if keyboard.just_pressed(KeyCode::Space) {
+            next_state.set(GameState::Winter);
+        }
+        return;
+    }
+    
+    let Some(mut visitor_deck) = visitor_deck else {
+        return; // No visitor deck available
+    };
+    
+    if text_query.is_empty() {
+        commands.spawn(Text2dBundle {
+            text: Text::from_section(
+                "FALL PHASE\nEach player draws a visitor card\nPress SPACE to continue to Winter",
+                TextStyle {
+                    font_size: 24.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ),
+            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
+            ..default()
+        });
+        
+        // Draw visitor cards for each player in wake-up order
+        for player_id in &turn_order.players {
+            if let Some(mut hand) = hands.iter_mut().find(|h| h.owner == *player_id) {
+                // Draw 1 summer visitor card (player's choice simplified to summer)
+                if let Some(visitor) = visitor_deck.draw_summer_visitor() {
+                    hand.add_visitor_card(visitor);
+                }
+                
+                // Check if player has cottage for bonus visitor
+                let has_cottage = structures.iter()
+                    .any(|s| s.owner == *player_id && matches!(s.structure_type, StructureType::Cottage));
+                
+                if has_cottage {
+                    // Draw bonus winter visitor
+                    if let Some(bonus_visitor) = visitor_deck.draw_winter_visitor() {
+                        hand.add_visitor_card(bonus_visitor);
+                    }
+                }
+            }
+        }
+    }
+    
+    if keyboard.just_pressed(KeyCode::Space) {
+        for entity in text_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        next_state.set(GameState::Winter);
+    }
+}

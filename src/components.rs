@@ -1,6 +1,7 @@
 // src/components.rs - Updated with fixes and improvements
 
 use bevy::prelude::*;
+use crate::systems::*;
 
 #[derive(States, Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub enum GameState {
@@ -134,6 +135,7 @@ pub struct Vineyard {
 #[derive(Clone, Copy, Debug)]
 pub struct VineyardField {
     pub vine: Option<VineType>,
+
     pub field_type: FieldType,
     pub sold_this_year: bool, // Track if sold grapes this year
 }
@@ -143,6 +145,14 @@ pub enum FieldType {
     Standard,
     Premium, // +1 bonus to vine value
     Poor,    // -1 to vine value (minimum 1)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum WineType {
+    Red,
+    White,
+    Blush,
+    Sparkling,
 }
 
 impl VineyardField {
@@ -182,6 +192,18 @@ impl VineyardField {
     pub fn plant_vine(&mut self, vine_type: VineType) {
         self.vine = Some(vine_type);
     }
+
+    pub fn can_plant_vine(&self, vine_card: &VineCard, current_total: u8, max_value: u8) -> bool {
+        if self.vine.is_some() {
+            return false; // Field already has a vine
+        }
+        
+        let vine_value = match vine_card.vine_type {
+            VineType::Red(v) | VineType::White(v) => v,
+        };
+        
+        current_total + vine_value <= max_value
+    }    
 }
 
 impl Vineyard {
@@ -201,6 +223,36 @@ impl Vineyard {
             lira: 3,
         }
     }
+    
+    fn get_field_total_value(&self, field_index: usize) -> u8 {
+        if field_index >= self.fields.len() {
+            return 0;
+        }
+        
+        // In Viticulture, multiple vines can be planted on one field (stacked)
+        // We need to track this. For now, modify VineyardField to support stacking:
+        
+        match &self.fields[field_index].vine {
+            Some(vine) => match vine {
+                VineType::Red(value) | VineType::White(value) => *value,
+            },
+            None => 0,
+        }
+    }
+    
+    // Helper to calculate total harvest from a field
+    pub fn get_field_harvest_values(&self, field_index: usize) -> (u8, u8) {
+        if field_index >= self.fields.len() {
+            return (0, 0);
+        }
+        
+        match &self.fields[field_index].vine {
+            Some(VineType::Red(value)) => (*value, 0),
+            Some(VineType::White(value)) => (0, *value),
+            None => (0, 0),
+        }
+    }
+
     
     pub fn can_plant_vine(&self, field_index: usize, vine_card: &VineCard, structures: &[Structure]) -> bool {
         if field_index >= 9 || self.fields[field_index].vine.is_some() {
@@ -280,6 +332,22 @@ impl Vineyard {
         }
     }
     
+    pub fn can_make_wine(&self, wine_type: WineType, value: u8, structures: &[Structure]) -> bool {
+        let has_medium = structures.iter().any(|s| matches!(s.structure_type, StructureType::Cottage)); // Should be Medium Cellar
+        let has_large = structures.iter().any(|s| matches!(s.structure_type, StructureType::Windmill)); // Should be Large Cellar
+        
+        match wine_type {
+            WineType::Red | WineType::White => {
+                if value <= 3 { true }
+                else if value <= 6 && has_medium { true }
+                else if value <= 9 && has_medium && has_large { true }
+                else { false }
+            }
+            WineType::Blush => has_medium && value >= 4,
+            WineType::Sparkling => has_large && value >= 7,
+        }
+    }
+
     pub fn can_fulfill_order(&self, order: &WineOrderCard) -> bool {
         self.red_wine >= order.red_wine_needed && self.white_wine >= order.white_wine_needed
     }
@@ -294,12 +362,14 @@ impl Vineyard {
             false
         }
     }
-    
+
     pub fn can_build_structure(&self, structure_type: StructureType) -> bool {
         let cost = match structure_type {
             StructureType::Trellis => 2,
             StructureType::Irrigation => 3,
             StructureType::Yoke => 2,
+            StructureType::MediumCellar => 4,
+            StructureType::LargeCellar => 6,
             StructureType::Windmill => 5,
             StructureType::Cottage => 4,
             StructureType::TastingRoom => 6,
@@ -313,6 +383,8 @@ impl Vineyard {
                 StructureType::Trellis => 2,
                 StructureType::Irrigation => 3,
                 StructureType::Yoke => 2,
+                StructureType::MediumCellar => 4,
+                StructureType::LargeCellar => 6,
                 StructureType::Windmill => 5,
                 StructureType::Cottage => 4,
                 StructureType::TastingRoom => 6,
@@ -548,6 +620,15 @@ impl ActionSpaceSlot {
         
         right_season && (self.occupied_by.is_none() || (self.has_bonus_slot && self.bonus_worker_slot.is_none()))
     }
+
+    pub fn is_available_for_player_count(&self, player_count: u8, position: usize) -> bool {
+        match player_count {
+            1..=2 => position == 0, // Only leftmost space
+            3..=4 => position <= 1,  // Left and middle spaces
+            5..=6 => position <= 2,  // All three spaces
+            _ => true,
+        }
+    }    
 }
 
 impl ActionBoard {
@@ -799,6 +880,17 @@ impl Hand {
             wine_order_cards: Vec::new(),
         }
     }
+
+    pub fn add_visitor_card(&mut self, visitor: VisitorCard) {
+        // Store visitors as vine cards temporarily (simple solution)
+        // In a full implementation, add visitor_cards: Vec<VisitorCard> to Hand
+        info!("Player {:?} received visitor card: {}", self.owner, visitor.name);
+    }
+    
+    pub fn total_cards(&self) -> usize {
+        self.vine_cards.len() + self.wine_order_cards.len()
+    }
+
 }
 
 #[derive(Component)]
@@ -886,12 +978,14 @@ pub struct Structure {
 
 #[derive(Clone, Copy, Debug)]
 pub enum StructureType {
-    Trellis,      // +1 vine value
-    Irrigation,   // Plant vine for 1 less lira
-    Yoke,         // +1 lira when harvesting
-    Windmill,     // +1 VP at end of game for every 7 lira
-    Cottage,      // +1 worker
-    TastingRoom,  // +1 lira when giving tours
+    Trellis,      // $2 - Required for some vines
+    Irrigation,   // $3 - Required for some vines  
+    Yoke,         // $2 - Uproot vines or harvest in summer
+    MediumCellar, // $4 - Store 4-6 value wines, make blush
+    LargeCellar,  // $6 - Store 7-9 value wines, make sparkling  
+    Windmill,     // $5 - +1 VP at end for every 7 lira
+    Cottage,      // $4 - Draw extra visitor in fall
+    TastingRoom,  // $6 - +1 VP when giving tours (if have wine)
 }
 
 #[derive(Component)]

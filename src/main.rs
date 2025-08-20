@@ -128,6 +128,12 @@ fn main() {
                 performance_monitor_system,
                 
             ))
+        .add_systems(Update, (
+                year_end_aging_system,
+                enforce_hand_limit_system,
+                assign_temporary_worker_system,
+                fall_visitor_system.run_if(in_state(GameState::Fall)),
+            ))            
         .add_systems(PostUpdate, (
             despawn_marked_entities,
         ),

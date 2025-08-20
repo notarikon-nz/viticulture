@@ -27,7 +27,7 @@ pub fn main_menu_system(
         }));
         
         commands.spawn(TextBundle::from_section(
-            format!("Current Setup: {} players ({} AI)\n\nFeatures:\n• Mama & Papa starting cards\n• Enhanced vineyard fields\n• Improved card art\n• Better balance for 3-4 players", 
+            format!("Current Setup: {} players ({} AI)", 
                    config.player_count, config.ai_count),
             TextStyle {
                 font_size: 18.0,

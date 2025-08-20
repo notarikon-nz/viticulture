@@ -14,7 +14,7 @@ pub struct VisitorCard {
     pub id: u32,
     pub name: String,
     pub effect: VisitorEffect,
-    pub timing: VisitorTiming,
+    pub season: VisitorSeason,
     pub cost: u8,
 }
 
@@ -29,6 +29,13 @@ pub enum VisitorEffect {
     StructureDiscount(u8),
     ExtraWorker,
     SwapFields,
+}
+
+
+#[derive(Clone, Copy)]
+pub enum VisitorSeason {
+    Summer,
+    Winter,
 }
 
 #[derive(Clone, Copy)]
@@ -89,7 +96,7 @@ impl VisitorDeck {
             id: 1000,
             name: "Merchant".to_string(),
             effect: VisitorEffect::GainLira(3),
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 0,
         });
         
@@ -97,7 +104,7 @@ impl VisitorDeck {
             id: 1001,
             name: "Architect".to_string(),
             effect: VisitorEffect::StructureDiscount(2),
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 1,
         });
         
@@ -105,7 +112,7 @@ impl VisitorDeck {
             id: 1002,
             name: "Innkeeper".to_string(),
             effect: VisitorEffect::DrawCards(2),
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 0,
         });
         
@@ -113,7 +120,7 @@ impl VisitorDeck {
             id: 1003,
             name: "Traveling Salesman".to_string(),
             effect: VisitorEffect::PlantFreeVine,
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 0,
         });
         
@@ -122,7 +129,7 @@ impl VisitorDeck {
             id: 2000,
             name: "Wine Critic".to_string(),
             effect: VisitorEffect::GainVP(2),
-            timing: VisitorTiming::Winter,
+            season: VisitorSeason::Winter,
             cost: 1,
         });
         
@@ -130,7 +137,7 @@ impl VisitorDeck {
             id: 2001,
             name: "Harvest Master".to_string(),
             effect: VisitorEffect::HarvestBonus(2),
-            timing: VisitorTiming::Winter,
+            season: VisitorSeason::Winter,
             cost: 0,
         });
         
@@ -138,7 +145,7 @@ impl VisitorDeck {
             id: 2002,
             name: "Cellar Master".to_string(),
             effect: VisitorEffect::WineBonus(2),
-            timing: VisitorTiming::Winter,
+            season: VisitorSeason::Winter,
             cost: 1,
         });
         
@@ -146,7 +153,7 @@ impl VisitorDeck {
             id: 2003,
             name: "Noble Patron".to_string(),
             effect: VisitorEffect::GainVP(3),
-            timing: VisitorTiming::Winter,
+            season: VisitorSeason::Winter,
             cost: 2,
         });
         
@@ -482,21 +489,21 @@ pub fn create_enhanced_visitor_cards() -> Vec<VisitorCard> {
             id: 1010,
             name: "Field Inspector".to_string(),
             effect: VisitorEffect::SwapFields,
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 1,
         },
         VisitorCard {
             id: 1011,
             name: "Soil Expert".to_string(),
             effect: VisitorEffect::PlantFreeVine, // Can plant on premium fields
-            timing: VisitorTiming::Summer,
+            season: VisitorSeason::Summer,
             cost: 0,
         },
         VisitorCard {
             id: 1012,
             name: "Master Gardener".to_string(),
             effect: VisitorEffect::HarvestBonus(3), // More grapes from all fields
-            timing: VisitorTiming::Winter,
+            season: VisitorSeason::Winter,
             cost: 2,
         },
     ]
