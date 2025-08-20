@@ -32,8 +32,10 @@ fn main() {
         .insert_resource(EndGameScoring::default())
         .insert_resource(BalanceTestResults::default())
         .insert_resource(AutoTestConfig::default())
+        .insert_resource(SaveManager::default())
+        .insert_resource(UndoSystem::default())
         .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin)
-        .add_systems(Startup, (setup_camera, load_assets, load_audio_assets))
+        .add_systems(Startup, (setup_camera, load_assets, load_audio_assets, initialize_settings_system, initialize_session_system))
         .add_systems(
             Update, (
                 main_menu_system.run_if(in_state(GameState::MainMenu)),
@@ -50,6 +52,18 @@ fn main() {
                 culled_sprite_system,
                 animate_text_system,
                 ui_game_over_system,
+                // Persistence & QoL systems
+                save_game_system,
+                load_game_system,
+                track_session_system,
+                track_action_usage_system,
+                update_statistics_on_game_end_system,
+                display_statistics_system,
+                settings_menu_system,
+                handle_settings_interaction_system,
+                create_snapshot_system,
+                undo_action_system,
+                display_undo_status_system,
                 // Bug fixes and maintenance
                 fix_worker_state_system,
                 fix_card_deck_system,

@@ -11,6 +11,10 @@ pub mod endgame;
 pub mod performance;
 pub mod bugfixes;
 pub mod balance;
+pub mod save;
+pub mod settings;
+pub mod statistics;
+pub mod undo;
 
 pub use setup::*;
 pub use ui::*;
@@ -25,3 +29,7 @@ pub use endgame::*;
 pub use performance::*;
 pub use bugfixes::*;
 pub use balance::*;
+pub use save::*;
+pub use settings::*;
+pub use statistics::*;
+pub use undo::*;
