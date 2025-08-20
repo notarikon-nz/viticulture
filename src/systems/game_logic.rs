@@ -13,7 +13,7 @@ pub fn spring_system(
     mut turn_order: ResMut<TurnOrder>,
     mut workers: Query<&mut Worker>,
     mut action_spaces: Query<&mut ActionSpaceSlot>,
-    mut config: ResMut<GameConfig>,
+    config: ResMut<GameConfig>,
     mut commands: Commands,
     text_query: Query<Entity, (With<Text>, Without<UIPanel>)>,
     ui_query: Query<Entity, With<UIPanel>>,
@@ -132,21 +132,21 @@ pub fn execute_action(
     
     match action {
         ActionSpace::DrawVine => {
-            if let (Some(mut hand), Some(card)) = (hand.as_mut(), card_decks.draw_vine_card()) {
+            if let (Some(hand), Some(card)) = (hand.as_mut(), card_decks.draw_vine_card()) {
                 hand.vine_cards.push(card);
                 play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
                 spawn_animated_text(commands, player_id, "+Vine", Color::from(Srgba::new(0.2, 0.8, 0.2, 1.0)));
             }
         }
         ActionSpace::DrawWineOrder => {
-            if let (Some(mut hand), Some(card)) = (hand.as_mut(), card_decks.draw_wine_order_card()) {
+            if let (Some(hand), Some(card)) = (hand.as_mut(), card_decks.draw_wine_order_card()) {
                 hand.wine_order_cards.push(card);
                 play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
                 spawn_animated_text(commands, player_id, "+Order", Color::from(Srgba::new(0.6, 0.2, 0.8, 1.0)));
             }
         }
         ActionSpace::PlantVine => {
-            if let (Some(mut hand), Some(mut vineyard)) = (hand.as_mut(), vineyard.as_mut()) {
+            if let (Some(hand), Some(vineyard)) = (hand.as_mut(), vineyard.as_mut()) {
                 if !hand.vine_cards.is_empty() {
                     let vine_card = hand.vine_cards.remove(0);
                     let structures = Vec::new();
@@ -162,7 +162,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::BuildStructure => {
-            if let Some(mut vineyard) = vineyard.as_mut() {
+            if let Some(vineyard) = vineyard.as_mut() {
                 if vineyard.can_build_structure(StructureType::Trellis) {
                     if vineyard.build_structure(StructureType::Trellis) {
                         spawn_animated_text(commands, player_id, "+Structure", Color::from(Srgba::new(0.8, 0.8, 0.2, 1.0)));
@@ -171,7 +171,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::Harvest => {
-            if let Some(mut vineyard) = vineyard.as_mut() {
+            if let Some(vineyard) = vineyard.as_mut() {
                 let structures = Vec::new();
                 let gained = vineyard.harvest_grapes(&structures);
                 if gained > 0 {
@@ -181,7 +181,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::MakeWine => {
-            if let Some(mut vineyard) = vineyard.as_mut() {
+            if let Some(vineyard) = vineyard.as_mut() {
                 // Enhanced wine making - can make blush and sparkling wine
                 let red_available = vineyard.red_grapes;
                 let white_available = vineyard.white_grapes;
@@ -216,7 +216,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::FillOrder => {
-            if let (Some(mut hand), Some(mut vineyard), Some(mut player)) = (hand.as_mut(), vineyard.as_mut(), player.as_mut()) {
+            if let (Some(hand), Some(vineyard), Some(player)) = (hand.as_mut(), vineyard.as_mut(), player.as_mut()) {
                 if !hand.wine_order_cards.is_empty() {
                     let order = &hand.wine_order_cards[0];
                     if vineyard.can_fulfill_order(order) {
@@ -235,8 +235,8 @@ pub fn execute_action(
             }
         }
         ActionSpace::GiveTour => {
-            if let Some(mut player) = player.as_mut() {
-                let mut bonus_lira = 2;
+            if let Some(player) = player.as_mut() {
+                let bonus_lira = 2;
                 // Check for Tasting Room structure bonus
                 // TODO: Query actual structures when implemented
                 player.gain_lira(bonus_lira);
@@ -245,7 +245,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::SellGrapes => {
-            if let (Some(mut vineyard), Some(mut player)) = (vineyard.as_mut(), player.as_mut()) {
+            if let (Some(vineyard), Some(player)) = (vineyard.as_mut(), player.as_mut()) {
                 let grapes_sold = vineyard.red_grapes + vineyard.white_grapes;
                 if grapes_sold > 0 {
                     player.gain_lira(grapes_sold);
@@ -257,7 +257,7 @@ pub fn execute_action(
             }
         }
         ActionSpace::TrainWorker => {
-            if let Some(mut player) = player.as_mut() {
+            if let Some(player) = player.as_mut() {
                 if player.lira >= 4 {
                     player.lira -= 4;
                     player.workers += 1;

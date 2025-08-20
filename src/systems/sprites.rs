@@ -34,7 +34,7 @@ pub fn update_sprites_system(
         ];
         
         let color_grey = Color::from(GREY);
-        let mut color = player_colors.get(worker.owner.0 as usize).unwrap_or(&color_grey);
+        let color = player_colors.get(worker.owner.0 as usize).unwrap_or(&color_grey);
         
         // Make grande workers brighter/more prominent
         let final_color = if worker.is_grande {

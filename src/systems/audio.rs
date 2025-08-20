@@ -118,7 +118,7 @@ pub fn update_audio_volume(
     mut music_query: Query<&mut AudioSink, With<BackgroundMusic>>,
 ) {
     if settings.is_changed() {
-        for mut sink in music_query.iter_mut() {
+        for sink in music_query.iter_mut() {
             if settings.enabled {
                 sink.set_volume(settings.music_volume);
             } else {

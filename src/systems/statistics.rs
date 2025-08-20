@@ -115,7 +115,7 @@ pub fn track_action_usage_system(
 
 pub fn update_statistics_on_game_end_system(
     mut stats: ResMut<GameStatistics>,
-    mut session_stats: ResMut<SessionStats>,
+    session_stats: ResMut<SessionStats>,
     time: Res<Time>,
     current_state: Res<State<GameState>>,
     players: Query<&Player>,

@@ -371,7 +371,7 @@ pub fn setup_advanced_vineyards_system(
 pub fn apply_board_bonuses_system(
     advanced_vineyards: Query<&AdvancedVineyard>,
     mut players: Query<&mut Player>,
-    mut vineyards: Query<&mut Vineyard>,
+    vineyards: Query<&mut Vineyard>,
     expansion_settings: Res<ExpansionSettings>,
 ) {
     if !expansion_settings.advanced_boards_enabled {
@@ -379,7 +379,7 @@ pub fn apply_board_bonuses_system(
     }
     
     for advanced in advanced_vineyards.iter() {
-        if let Some(mut player) = players.iter_mut().find(|p| p.id == advanced.owner) {
+        if let Some(player) = players.iter_mut().find(|p| p.id == advanced.owner) {
             match advanced.special_ability {
                 SpecialAbility::ExtraLira => {
                     // Applied per turn in other systems

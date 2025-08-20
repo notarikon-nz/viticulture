@@ -175,7 +175,7 @@ pub fn dynamic_difficulty_system(
 
 // Balance tweaks based on testing
 pub fn apply_balance_tweaks(
-    mut card_decks: ResMut<CardDecks>,
+    card_decks: ResMut<CardDecks>,
     results: Res<BalanceTestResults>,
 ) {
     if results.games_played < 10 {
