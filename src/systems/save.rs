@@ -95,7 +95,7 @@ pub struct ActionSpaceSave {
     pub bonus_worker_slot: Option<u8>,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct SaveManager {
     pub auto_save_timer: Timer,
     pub last_save_time: f32,
@@ -284,9 +284,11 @@ fn load_save_data(
     
     // Load vineyards
     for vineyard_save in &save_data.vineyards {
+        let vineyard_save_clone = vineyard_save.clone();
+
         commands.spawn(Vineyard {
             owner: PlayerId(vineyard_save.owner_id),
-            fields: vineyard_save.fields.map(|f| f.map(|vt| {
+            fields: vineyard_save_clone.fields.map(|f| f.map(|vt| {
                 if vt.is_red {
                     VineType::Red(vt.value)
                 } else {

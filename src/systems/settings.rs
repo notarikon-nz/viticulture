@@ -355,6 +355,7 @@ pub fn handle_settings_interaction_system(
     existing_settings: Query<Entity, With<SettingsPanel>>,
     mut audio_settings: ResMut<AudioSettings>,
 ) {
+
     for (interaction, settings_button, mut color) in &mut interaction_query {
         match *interaction {
             Interaction::Pressed => {

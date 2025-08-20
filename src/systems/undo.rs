@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use crate::components::*;
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct UndoSystem {
     pub snapshots: Vec<GameSnapshot>,
     pub max_snapshots: usize,

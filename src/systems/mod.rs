@@ -15,6 +15,9 @@ pub mod save;
 pub mod settings;
 pub mod statistics;
 pub mod undo;
+pub mod expansions;
+pub mod tooltips;
+pub mod advanced;
 
 pub use setup::*;
 pub use ui::*;
@@ -33,3 +36,6 @@ pub use save::*;
 pub use settings::*;
 pub use statistics::*;
 pub use undo::*;
+pub use expansions::*;
+pub use tooltips::*;
+pub use advanced::*;
