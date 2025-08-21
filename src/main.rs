@@ -60,10 +60,33 @@ fn main() {
                 (spring_system, start_background_music).run_if(in_state(GameState::Spring)),
                 mouse_input_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 worker_placement_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
+
+                // Conditional AI systems - use proper run conditions
+                ai_decision_system.run_if(
+                    in_state(GameState::Summer)
+                        .or_else(in_state(GameState::Winter))
+                        .and_then(not(testing_mode_enabled))
+                ),
+                
+                // Fast AI for testing
+                fast_ai_decision_system.run_if(
+                    in_state(GameState::Summer)
+                        .or_else(in_state(GameState::Winter))
+                        .and_then(testing_mode_enabled)
+                ),
+                                
                 ai_decision_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 update_audio_volume.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 fall_system.run_if(in_state(GameState::Fall)),
-                (check_victory_system, calculate_final_scores).run_if(in_state(GameState::GameOver)),
+                // Victory check runs during ALL gameplay states to detect wins immediately
+                check_victory_system.run_if(
+                    in_state(GameState::Spring)
+                        .or_else(in_state(GameState::Summer))
+                        .or_else(in_state(GameState::Fall))
+                        .or_else(in_state(GameState::Winter))
+                ),
+                // Final scoring only runs when GameOver
+                calculate_final_scores.run_if(in_state(GameState::GameOver)),
                 ui_button_system.run_if(in_state(GameState::Summer).or_else(in_state(GameState::Winter))),
                 
                 //cached_ui_update_system,
@@ -118,12 +141,17 @@ fn main() {
                 emergency_recovery_system,
              ))
         .add_systems(Update, (
-               // Balance testing
+               // Balance testing systems
                 auto_balance_test_system,
+                ui_protection_system.run_if(testing_mode_enabled),
+                fast_test_mode_system.run_if(testing_mode_enabled),
+                unstuck_system.run_if(testing_mode_enabled),
+                protected_setup_system.run_if(in_state(GameState::Setup).and_then(testing_mode_enabled)),
+                
+                // Regular balance systems
                 statistics::track_action_usage_system,
                 dynamic_difficulty_system,
                 apply_balance_tweaks,
-                fast_test_mode_system,
                 game_length_tracking_system,
                 performance_monitor_system,
                 
@@ -140,6 +168,16 @@ fn main() {
         )
         .run();
 }
+
+// Custom run condition functions
+fn testing_mode_enabled(test_config: Res<AutoTestConfig>) -> bool {
+    test_config.enabled
+}
+
+fn not_testing_mode_enabled(test_config: Res<AutoTestConfig>) -> bool {
+    !test_config.enabled
+}
+
 
 pub fn despawn_marked_entities(
     mut commands: Commands,

@@ -171,8 +171,7 @@ pub fn validate_game_state_system(
     
     // Only warn if counts are stable and wrong
     if player_count != expected_count {
-        warn!("Player count mismatch: expected {}, found {} (this may be normal during transitions)", 
-              expected_count, player_count);
+        // warn!("Player count mismatch: expected {}, found {} (this may be normal during transitions)", expected_count, player_count);
     }
     
     // Check worker consistency with corrected logic
@@ -181,8 +180,7 @@ pub fn validate_game_state_system(
         let expected_workers = (player.workers + 1) as usize; // +1 for grande worker
         
         if player_workers != expected_workers {
-            warn!("Worker count mismatch for player {:?}: expected {}, found {}", 
-                  player.id, expected_workers, player_workers);
+            // warn!("Worker count mismatch for player {:?}: expected {}, found {}", player.id, expected_workers, player_workers);
         }
     }
 }

@@ -3,6 +3,17 @@
 use bevy::prelude::*;
 use crate::systems::*;
 
+// UI Text Preservation
+#[derive(Component)]
+pub struct PhaseText;
+
+#[derive(Component)]
+pub struct GameStatusText;
+
+#[derive(Component)]
+pub struct ButtonText;
+
+// 
 #[derive(States, Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub enum GameState {
     #[default]
@@ -1132,9 +1143,6 @@ pub enum StructureType {
     Cottage,      // $4 - Draw extra visitor in fall
     TastingRoom,  // $6 - +1 VP when giving tours (if have wine)
 }
-
-#[derive(Component)]
-pub struct GameStatusText;
 
 #[derive(Component)]
 pub struct MarkedForDespawn;

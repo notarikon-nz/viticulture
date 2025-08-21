@@ -231,6 +231,8 @@ pub fn trigger_season_transition(
     to_season: GameState,
     settings: &AnimationSettings,
 ) {
+    return;
+    
     if !settings.enable_transitions {
         return;
     }

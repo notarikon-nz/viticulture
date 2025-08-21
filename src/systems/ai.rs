@@ -107,7 +107,7 @@ pub fn ai_decision_system(
     }
 }
 
-fn choose_ai_action(
+pub fn choose_ai_action(
     player_id: PlayerId,
     difficulty: AIDifficulty,
     workers: &Query<&mut Worker>,
@@ -226,7 +226,7 @@ fn evaluate_action(
     }
 }
 
-fn execute_ai_action(
+pub fn execute_ai_action(
     action: ActionSpace,
     player_id: PlayerId,
     workers: &mut Query<&mut Worker>,

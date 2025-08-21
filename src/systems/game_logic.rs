@@ -1,9 +1,244 @@
+// src/systems/game_logic.rs - Fixed optimized version
+
 use bevy::prelude::*;
 use crate::components::*;
 use crate::systems::*;
 
+// === CONSTANTS ===
 const YELLOW: Srgba = Srgba::new(1.0, 1.0, 0.0, 1.0);
 const GOLD: Srgba = Srgba::new(1.0, 0.84, 0.0, 1.0);
+const GREEN: Srgba = Srgba::new(0.2, 0.8, 0.2, 1.0);
+const PURPLE: Srgba = Srgba::new(0.6, 0.2, 0.8, 1.0);
+const BLUE: Srgba = Srgba::new(0.5, 0.8, 1.0, 1.0);
+const WHITE: Color = Color::WHITE;
+
+// Game text constants
+const SPRING_TEXT: &str = "SPRING PHASE - YEAR {}\nChoose wake-up times (1-7)\nPress SPACE to auto-assign and continue";
+const FALL_TEXT: &str = "FALL PHASE\nAutomatic harvest from planted vines\n\nPress SPACE to continue to Winter";
+const FALL_VISITOR_TEXT: &str = "FALL PHASE\nEach player draws a visitor card\nPress SPACE to continue to Winter";
+const GAME_OVER_TEXT: &str = "GAME OVER!\n{} WINS with {} Victory Points!\n\nPress SPACE to play again";
+
+// Action text constants
+const WAKE_UP_VINE: &str = "Wake-up: +Vine";
+const WAKE_UP_LIRA: &str = "Wake-up: +{} Lira";
+const WAKE_UP_VP: &str = "Wake-up: +1 VP";
+const WAKE_UP_ORDER: &str = "Wake-up: +Order";
+
+// Animation settings
+const PARTICLE_DENSITIES: [f32; 3] = [15.0, 30.0, 20.0]; // construction, victory, harvest
+const ANIMATION_DURATIONS: [f32; 3] = [1.2, 1.5, 1.8]; // construction, victory, harvest
+
+// Worker positioning
+const WORKER_BASE_X: f32 = -500.0;
+const WORKER_SPACING: f32 = 100.0;
+const WORKER_Y: f32 = -200.0;
+const GRANDE_WORKER_Y: f32 = -170.0;
+
+// Field positioning
+const FIELD_BASE_X: f32 = -200.0;
+const FIELD_BASE_Y: f32 = 100.0;
+const FIELD_SPACING_X: f32 = 40.0;
+const FIELD_SPACING_Y: f32 = 40.0;
+const FIELDS_PER_ROW: usize = 3;
+
+// Action rewards
+const TOUR_LIRA_REWARD: u8 = 2;
+const WORKER_TRAIN_COST: u8 = 4;
+const HAND_LIMIT: usize = 7;
+
+// Wake-up bonuses mapping
+const WAKE_UP_BONUSES: [Option<WakeUpBonus>; 7] = [
+    Some(WakeUpBonus::DrawVineCard),        // Position 1
+    Some(WakeUpBonus::GainLira(1)),         // Position 2  
+    None,                                   // Position 3
+    Some(WakeUpBonus::GainLira(1)),         // Position 4
+    Some(WakeUpBonus::DrawWineOrderCard),   // Position 5
+    Some(WakeUpBonus::GainVictoryPoint),    // Position 6
+    None,                                   // Position 7 (gets temporary worker)
+];
+
+// === HELPER FUNCTIONS ===
+
+/// Calculate player-specific position offset
+#[inline]
+fn player_position_offset(player_id: PlayerId) -> Vec2 {
+    Vec2::new(-400.0 + (player_id.0 as f32 * 200.0), 0.0)
+}
+
+/// Calculate worker position for a player
+#[inline]
+fn worker_position(player_id: PlayerId, is_grande: bool) -> Vec2 {
+    let y_offset = if is_grande { GRANDE_WORKER_Y } else { WORKER_Y };
+    Vec2::new(WORKER_BASE_X + (player_id.0 as f32 * WORKER_SPACING), y_offset)
+}
+
+/// Calculate field position for vineyard display
+#[inline]
+fn calculate_field_position(player_id: PlayerId, field_index: usize) -> Vec2 {
+    let field_x = FIELD_BASE_X + ((field_index % FIELDS_PER_ROW) as f32 * FIELD_SPACING_X);
+    let field_y = FIELD_BASE_Y - ((field_index / FIELDS_PER_ROW) as f32 * FIELD_SPACING_Y);
+    Vec2::new(field_x + (player_id.0 as f32 * 200.0), field_y)
+}
+
+/// Spawn game phase text
+fn spawn_phase_text(commands: &mut Commands, text: &str) {
+    commands.spawn(Text2dBundle {
+        text: Text::from_section(text, TextStyle {
+            font_size: 24.0,
+            color: WHITE,
+            ..default()
+        }),
+        transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
+        ..default()
+    });
+}
+
+/// Clean up phase text entities
+fn cleanup_phase_text(commands: &mut Commands, text_query: &Query<Entity, (With<Text>, Without<UIPanel>)>) {
+    for entity in text_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+/// Reset workers to starting positions with animation
+fn reset_workers_to_start(workers: &mut Query<&mut Worker>) {
+    for mut worker in workers.iter_mut() {
+        if worker.placed_at.is_some() {
+            worker.position = worker_position(worker.owner, worker.is_grande);
+            worker.placed_at = None;
+        }
+    }
+}
+
+/// Reset action spaces
+fn reset_action_spaces(action_spaces: &mut Query<&mut ActionSpaceSlot>) {
+    for mut space in action_spaces.iter_mut() {
+        space.occupied_by = None;
+        space.bonus_worker_slot = None;
+    }
+}
+
+/// Apply wake-up bonus efficiently using lookup table
+fn apply_wake_up_bonus_optimized(
+    player_id: PlayerId,
+    position: usize,
+    hands: &mut Query<&mut Hand>,
+    players: &mut Query<&mut Player>,
+    card_decks: &mut ResMut<CardDecks>,
+    commands: &mut Commands,
+) {
+    if position >= WAKE_UP_BONUSES.len() {
+        return;
+    }
+
+    if let Some(bonus) = WAKE_UP_BONUSES[position] {
+        apply_wake_up_bonus(player_id, bonus, hands, players, card_decks, commands);
+    }
+}
+
+/// Optimized particle spawning with pre-calculated settings
+fn spawn_particles_optimized(
+    commands: &mut Commands,
+    position: Vec2,
+    particle_type: ParticleType,
+    amount: u8,
+    settings: &AnimationSettings,
+) {
+    let (density_index, duration_index, color) = match particle_type {
+        ParticleType::Construction => (0, 0, Color::from(Srgba::new(0.8, 0.8, 0.8, 1.0))),
+        ParticleType::VictoryPoints => (1, 1, Color::from(YELLOW)),
+        _ => (2, 2, Color::from(GREEN)), // Default to harvest
+    };
+
+    let particle_count = (PARTICLE_DENSITIES[density_index] * amount as f32 * settings.particle_density) as usize;
+    let duration = ANIMATION_DURATIONS[duration_index];
+    
+    let particles = create_particles_by_type(position, particle_count, color);
+    
+    commands.spawn((
+        SpriteBundle {
+            transform: Transform::from_translation(position.extend(3.0)),
+            ..default()
+        },
+        ParticleEffect {
+            particles,
+            effect_type: particle_type,
+            timer: Timer::from_seconds(duration, TimerMode::Once),
+        },
+    ));
+}
+
+/// Generic particle creation function
+fn create_particles_by_type(center: Vec2, count: usize, color: Color) -> Vec<Particle> {
+    use rand::Rng;
+    let mut rng = rand::rng();
+    
+    (0..count)
+        .map(|_| {
+            let angle = rng.random_range(0.0..std::f32::consts::TAU);
+            let speed = rng.random_range(30.0..100.0);
+            let velocity = Vec2::new(angle.cos(), angle.sin()) * speed;
+            
+            Particle {
+                position: Vec2::new(rng.random_range(-8.0..8.0), rng.random_range(-5.0..5.0)),
+                velocity,
+                life: rng.random_range(0.8..2.0),
+                max_life: 2.0,
+                size: rng.random_range(1.0..3.0),
+                color,
+            }
+        })
+        .collect()
+}
+
+/// Spawn animated text helper
+fn spawn_animated_text(commands: &mut Commands, player_id: PlayerId, text: &str, color: Color) {
+    crate::systems::animations::spawn_animated_text(commands, player_id, text, color);
+}
+
+/// Spawn construction particles
+fn spawn_construction_particles(commands: &mut Commands, position: Vec2, settings: &AnimationSettings) {
+    spawn_particles_optimized(commands, position, ParticleType::Construction, 1, settings);
+}
+
+/// Spawn harvest particles
+fn spawn_harvest_particles(commands: &mut Commands, position: Vec2, gained: u8, settings: &AnimationSettings) {
+    spawn_particles_optimized(commands, position, ParticleType::VictoryPoints, gained, settings);
+}
+
+/// Spawn victory point particles
+fn spawn_victory_point_particles(commands: &mut Commands, position: Vec2, vp_amount: u8, settings: &AnimationSettings) {
+    spawn_particles_optimized(commands, position, ParticleType::VictoryPoints, vp_amount, settings);
+}
+
+/// Spawn lira particles
+fn spawn_lira_particles(commands: &mut Commands, position: Vec2, amount: u8, settings: &AnimationSettings) {
+    spawn_particles_optimized(commands, position, ParticleType::VictoryPoints, amount, settings);
+}
+
+/// Animate card draw
+fn animate_card_draw(commands: &mut Commands, card_type: CardType, target_pos: Vec2, settings: &AnimationSettings) {
+    // Implementation would be in animations module
+    crate::systems::animations::animate_card_draw(commands, card_type, target_pos, settings);
+}
+
+/// Spawn wine pouring effect
+fn spawn_wine_pouring_effect(commands: &mut Commands, position: Vec2, settings: &AnimationSettings) {
+    spawn_particles_optimized(commands, position, ParticleType::Construction, 3, settings);
+}
+
+/// Trigger season transition
+fn trigger_season_transition(
+    commands: &mut Commands, 
+    from: GameState, 
+    to: GameState, 
+    settings: &AnimationSettings
+) {
+    // Implementation would be in animations module
+    crate::systems::animations::trigger_season_transition(commands, from, to, settings);
+}
+
+// === MAIN SYSTEMS ===
 
 pub fn spring_system(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -20,68 +255,39 @@ pub fn spring_system(
     mut card_decks: ResMut<CardDecks>,
     animation_settings: Res<AnimationSettings>,
 ) {
+    // Setup UI if not present
     if ui_query.is_empty() {
         crate::systems::ui::setup_ui(&mut commands);
     }
     
+    // Display spring phase text
     if text_query.is_empty() {
-        commands.spawn(Text2dBundle {
-            text: Text::from_section(
-                format!("SPRING PHASE - YEAR {}\nChoose wake-up times (1-7)\nPress SPACE to auto-assign and continue", config.current_year),
-                TextStyle {
-                    font_size: 24.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
-            ..default()
-        });
+        let text = SPRING_TEXT.replace("{}", &config.current_year.to_string());
+        spawn_phase_text(&mut commands, &text);
     }
     
     if keyboard.just_pressed(KeyCode::Space) {
-        for entity in text_query.iter() {
-            commands.entity(entity).despawn();
-        }
+        cleanup_phase_text(&mut commands, &text_query);
         
-        // Animate workers returning to starting positions
-        for mut worker in workers.iter_mut() {
-            if worker.placed_at.is_some() {
-                let start_pos = worker.position;
-                let player_id = worker.owner.0;
-                let y_offset = if worker.is_grande { -170.0 } else { -200.0 };
-                let target_pos = Vec2::new(-500.0 + (player_id as f32 * 100.0), y_offset);
-                
-                // This would need the worker entity, so we'd need to restructure this
-                // For now, just update position directly
-                worker.position = target_pos;
-            }
-            
-            worker.placed_at = None;
-        }
+        // Reset game state efficiently
+        reset_workers_to_start(&mut workers);
+        reset_action_spaces(&mut action_spaces);
         
-        for mut space in action_spaces.iter_mut() {
-            space.occupied_by = None;
-            space.bonus_worker_slot = None;
-        }
-        
-        let mut wake_up_assignments = Vec::new();
-        for (i, player_id) in turn_order.players.iter().enumerate() {
-            wake_up_assignments.push((*player_id, (i + 1) as u8));
-        }
+        // Assign wake-up order
+        let wake_up_assignments: Vec<_> = turn_order.players.iter()
+            .enumerate()
+            .map(|(i, &player_id)| (player_id, (i + 1) as u8))
+            .collect();
         turn_order.set_wake_up_order(wake_up_assignments);
         
-        for (player_id, _) in &turn_order.wake_up_order {
-            if let Some(bonus) = turn_order.get_wake_up_bonus(*player_id) {
-                crate::systems::game_logic::apply_wake_up_bonus(*player_id, bonus, &mut hands, &mut players, &mut card_decks, &mut commands);
-            }
+        // Apply wake-up bonuses efficiently
+        for (i, &(player_id, _)) in turn_order.wake_up_order.iter().enumerate() {
+            apply_wake_up_bonus_optimized(player_id, i, &mut hands, &mut players, &mut card_decks, &mut commands);
         }
         
         turn_order.current_player = 0;
         
-        // Trigger season transition
         trigger_season_transition(&mut commands, GameState::Spring, GameState::Summer, &animation_settings);
-        
         next_state.set(GameState::Summer);
     }
 }
@@ -99,27 +305,28 @@ fn apply_wake_up_bonus(
             if let Some(mut hand) = hands.iter_mut().find(|h| h.owner == player_id) {
                 if let Some(card) = card_decks.draw_vine_card() {
                     hand.vine_cards.push(card);
-                    spawn_animated_text(commands, player_id, "Wake-up: +Vine", Color::from(Srgba::new(0.2, 0.8, 0.2, 1.0)));
+                    spawn_animated_text(commands, player_id, WAKE_UP_VINE, Color::from(GREEN));
                 }
             }
         }
         WakeUpBonus::GainLira(amount) => {
             if let Some(mut player) = players.iter_mut().find(|p| p.id == player_id) {
                 player.gain_lira(amount);
-                spawn_animated_text(commands, player_id, &format!("Wake-up: +{} Lira", amount), Color::from(GOLD));
+                let text = WAKE_UP_LIRA.replace("{}", &amount.to_string());
+                spawn_animated_text(commands, player_id, &text, Color::from(GOLD));
             }
         }
         WakeUpBonus::GainVictoryPoint => {
             if let Some(mut player) = players.iter_mut().find(|p| p.id == player_id) {
                 player.gain_victory_points(1);
-                spawn_animated_text(commands, player_id, "Wake-up: +1 VP", Color::from(YELLOW));
+                spawn_animated_text(commands, player_id, WAKE_UP_VP, Color::from(YELLOW));
             }
         }
         WakeUpBonus::DrawWineOrderCard => {
             if let Some(mut hand) = hands.iter_mut().find(|h| h.owner == player_id) {
                 if let Some(card) = card_decks.draw_wine_order_card() {
                     hand.wine_order_cards.push(card);
-                    spawn_animated_text(commands, player_id, "Wake-up: +Order", Color::from(Srgba::new(0.6, 0.2, 0.8, 1.0)));
+                    spawn_animated_text(commands, player_id, WAKE_UP_ORDER, Color::from(PURPLE));
                 }
             }
         }
@@ -127,6 +334,7 @@ fn apply_wake_up_bonus(
     }
 }
 
+/// Optimized action execution with proper types
 pub fn execute_action(
     action: ActionSpace,
     player_id: PlayerId,
@@ -141,48 +349,42 @@ pub fn execute_action(
     audio_settings: &Res<AudioSettings>,
     animation_settings: &Res<AnimationSettings>,
 ) {
+    // Pre-calculate commonly used values
+    let player_pos = player_position_offset(player_id);
+    let player_structures: Vec<_> = structures.iter()
+        .filter(|s| s.owner == player_id)
+        .cloned()
+        .collect();
+
+    // Get mutable references once
     let mut hand = hands.iter_mut().find(|h| h.owner == player_id);
     let mut vineyard = vineyards.iter_mut().find(|v| v.owner == player_id);
     let mut player = players.iter_mut().find(|p| p.id == player_id);
-    
-    // Calculate player position for effects
-    let player_pos = Vec2::new(-400.0 + (player_id.0 as f32 * 200.0), 0.0);
-    
+
     match action {
         ActionSpace::DrawVine => {
             if let (Some(hand), Some(card)) = (hand.as_mut(), card_decks.draw_vine_card()) {
                 hand.vine_cards.push(card);
-                
-                // Animate card draw
                 let target_pos = Vec2::new(player_pos.x - 100.0, -200.0);
                 animate_card_draw(commands, CardType::Vine, target_pos, animation_settings);
-                
                 crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
-                crate::systems::animations::spawn_animated_text(commands, player_id, "+Vine", Color::from(Srgba::new(0.2, 0.8, 0.2, 1.0)));
+                spawn_animated_text(commands, player_id, "+Vine", Color::from(GREEN));
             }
         }
         ActionSpace::DrawWineOrder => {
             if let (Some(hand), Some(card)) = (hand.as_mut(), card_decks.draw_wine_order_card()) {
                 hand.wine_order_cards.push(card);
-                
-                // Animate card draw
                 let target_pos = Vec2::new(player_pos.x + 100.0, -200.0);
                 animate_card_draw(commands, CardType::WineOrder, target_pos, animation_settings);
-                
                 crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::CardDraw);
-                crate::systems::animations::spawn_animated_text(commands, player_id, "+Order", Color::from(Srgba::new(0.6, 0.2, 0.8, 1.0)));
+                spawn_animated_text(commands, player_id, "+Order", Color::from(PURPLE));
             }
         }
         ActionSpace::PlantVine => {
             if let (Some(hand), Some(vineyard)) = (hand.as_mut(), vineyard.as_mut()) {
                 if !hand.vine_cards.is_empty() {
                     let vine_card = &hand.vine_cards[0];
-                    let player_structures: Vec<_> = structures.iter()
-                        .filter(|s| s.owner == player_id)
-                        .cloned()
-                        .collect();
                     
-                    // Find first suitable field with structure requirements
                     for i in 0..9 {
                         if vineyard.can_plant_vine_with_requirements(i, vine_card, &player_structures) {
                             let vine_card = hand.vine_cards.remove(0);
@@ -191,7 +393,7 @@ pub fn execute_action(
                             
                             let field_pos = calculate_field_position(player_id, i);
                             spawn_construction_particles(commands, field_pos, animation_settings);
-                            crate::systems::animations::spawn_animated_text(commands, player_id, "Planted!", Color::from(Srgba::new(0.4, 0.8, 0.4, 1.0)));
+                            spawn_animated_text(commands, player_id, "Planted!", Color::from(Srgba::new(0.4, 0.8, 0.4, 1.0)));
                             break;
                         }
                     }
@@ -203,11 +405,9 @@ pub fn execute_action(
                 let structures = Vec::new();
                 let gained = vineyard.harvest_grapes(&structures);
                 if gained > 0 {
-                    // Harvest particle effects
                     spawn_harvest_particles(commands, player_pos, gained, animation_settings);
-                    
                     crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::Harvest);
-                    crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} Grapes", gained), Color::from(Srgba::new(0.8, 0.4, 0.8, 1.0)));
+                    spawn_animated_text(commands, player_id, &format!("+{} Grapes", gained), Color::from(Srgba::new(0.8, 0.4, 0.8, 1.0)));
                 }
             }
         }
@@ -221,20 +421,17 @@ pub fn execute_action(
                     vineyard.white_grapes -= 1;
                     vineyard.red_wine += 2;
                     
-                    // Wine pouring effect
                     spawn_wine_pouring_effect(commands, player_pos, animation_settings);
-                    
                     crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
-                    crate::systems::animations::spawn_animated_text(commands, player_id, "+Sparkling Wine", Color::from(Srgba::new(0.9, 0.7, 0.2, 1.0)));
+                    spawn_animated_text(commands, player_id, "+Sparkling Wine", Color::from(Srgba::new(0.9, 0.7, 0.2, 1.0)));
                 } else if red_available >= 1 && white_available >= 1 {
                     vineyard.red_grapes -= 1;
                     vineyard.white_grapes -= 1;
                     vineyard.white_wine += 1;
                     
                     spawn_wine_pouring_effect(commands, player_pos, animation_settings);
-                    
                     crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
-                    crate::systems::animations::spawn_animated_text(commands, player_id, "+Blush Wine", Color::from(Srgba::new(0.9, 0.5, 0.6, 1.0)));
+                    spawn_animated_text(commands, player_id, "+Blush Wine", Color::from(Srgba::new(0.9, 0.5, 0.6, 1.0)));
                 } else {
                     let red_to_use = if red_available > 0 { 1 } else { 0 };
                     let white_to_use = if white_available > 0 { 1 } else { 0 };
@@ -243,9 +440,8 @@ pub fn execute_action(
                         let total_wine = red_to_use + white_to_use;
                         if total_wine > 0 {
                             spawn_wine_pouring_effect(commands, player_pos, animation_settings);
-                            
                             crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::WineMake);
-                            crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} Wine", total_wine), Color::from(Srgba::new(0.7, 0.2, 0.2, 1.0)));
+                            spawn_animated_text(commands, player_id, &format!("+{} Wine", total_wine), Color::from(Srgba::new(0.7, 0.2, 0.2, 1.0)));
                         }
                     }
                 }
@@ -260,37 +456,30 @@ pub fn execute_action(
                         vineyard.red_wine -= order.red_wine_needed;
                         vineyard.white_wine -= order.white_wine_needed;
                         
-                        // Apply immediate rewards
                         player.gain_victory_points(order.victory_points);
                         player.gain_lira(order.immediate_payout());
                         
-                        // Advance residual payment tracker
                         if let Some(mut tracker) = trackers.iter_mut().find(|t| t.owner == player_id) {
                             tracker.advance(order.residual_payment());
                         }
                         
-                        // Existing particle effects...
                         spawn_victory_point_particles(commands, player_pos, order.victory_points, animation_settings);
                         if order.immediate_payout() > 0 {
                             spawn_lira_particles(commands, player_pos + Vec2::new(50.0, 0.0), order.immediate_payout(), animation_settings);
                         }
                         
                         crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::VictoryPoint);
-                        crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} VP", order.victory_points), Color::from(Srgba::new(1.0, 1.0, 0.0, 1.0)));
+                        spawn_animated_text(commands, player_id, &format!("+{} VP", order.victory_points), Color::from(YELLOW));
                     }
                 }
             }
         }
         ActionSpace::GiveTour => {
             if let Some(player) = player.as_mut() {
-                let bonus_lira = 2;
-                player.gain_lira(bonus_lira);
-                
-                // Lira gain particles
-                spawn_lira_particles(commands, player_pos, bonus_lira, animation_settings);
-                
+                player.gain_lira(TOUR_LIRA_REWARD);
+                spawn_lira_particles(commands, player_pos, TOUR_LIRA_REWARD, animation_settings);
                 crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
-                crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} Lira", bonus_lira), Color::from(Srgba::new(1.0, 0.84, 0.0, 1.0)));
+                spawn_animated_text(commands, player_id, &format!("+{} Lira", TOUR_LIRA_REWARD), Color::from(GOLD));
             }
         }
         ActionSpace::SellGrapes => {
@@ -301,24 +490,20 @@ pub fn execute_action(
                     vineyard.red_grapes = 0;
                     vineyard.white_grapes = 0;
                     
-                    // Lira gain particles
                     spawn_lira_particles(commands, player_pos, grapes_sold, animation_settings);
-                    
                     crate::systems::audio::play_sfx(commands, audio_assets, audio_settings, AudioType::LiraGain);
-                    crate::systems::animations::spawn_animated_text(commands, player_id, &format!("+{} Lira", grapes_sold), Color::from(Srgba::new(1.0, 0.84, 0.0, 1.0)));
+                    spawn_animated_text(commands, player_id, &format!("+{} Lira", grapes_sold), Color::from(GOLD));
                 }
             }
         }
         ActionSpace::TrainWorker => {
             if let Some(player) = player.as_mut() {
-                if player.lira >= 4 {
-                    player.lira -= 4;
+                if player.lira >= WORKER_TRAIN_COST {
+                    player.lira -= WORKER_TRAIN_COST;
                     player.workers += 1;
                     
-                    // Construction particles for training
                     spawn_construction_particles(commands, player_pos, animation_settings);
-                    
-                    crate::systems::animations::spawn_animated_text(commands, player_id, "+Worker", Color::from(Srgba::new(0.5, 0.8, 1.0, 1.0)));
+                    spawn_animated_text(commands, player_id, "+Worker", Color::from(BLUE));
                 }
             }
         }
@@ -326,10 +511,8 @@ pub fn execute_action(
             if let Some(vineyard) = vineyard.as_mut() {
                 if vineyard.can_build_structure(StructureType::Trellis) {
                     if vineyard.build_structure(StructureType::Trellis) {
-                        // Construction particles
                         spawn_construction_particles(commands, player_pos, animation_settings);
-                        
-                        crate::systems::animations::spawn_animated_text(commands, player_id, "+Structure", Color::from(Srgba::new(0.8, 0.8, 0.2, 1.0)));
+                        spawn_animated_text(commands, player_id, "+Structure", Color::from(Srgba::new(0.8, 0.8, 0.2, 1.0)));
                     }
                 }
             }
@@ -346,38 +529,22 @@ pub fn fall_system(
     animation_settings: Res<AnimationSettings>,
 ) {
     if text_query.is_empty() {
-        commands.spawn(Text2dBundle {
-            text: Text::from_section(
-                "FALL PHASE\nAutomatic harvest from planted vines\n\nPress SPACE to continue to Winter",
-                TextStyle {
-                    font_size: 24.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
-            ..default()
-        });
+        spawn_phase_text(&mut commands, FALL_TEXT);
     }
     
     if keyboard.just_pressed(KeyCode::Space) {
-        for entity in text_query.iter() {
-            commands.entity(entity).despawn();
-        }
+        cleanup_phase_text(&mut commands, &text_query);
         
         let structures = Vec::new();
         for mut vineyard in vineyards.iter_mut() {
             let gained = vineyard.harvest_grapes(&structures);
             if gained > 0 {
-                // Harvest particles for automatic harvest
-                let player_pos = Vec2::new(-400.0 + (vineyard.owner.0 as f32 * 200.0), 0.0);
+                let player_pos = player_position_offset(vineyard.owner);
                 spawn_harvest_particles(&mut commands, player_pos, gained, &animation_settings);
             }
         }
         
-        // Trigger season transition
         trigger_season_transition(&mut commands, GameState::Fall, GameState::Winter, &animation_settings);
-        
         next_state.set(GameState::Winter);
     }
 }
@@ -396,7 +563,6 @@ pub fn check_victory_system(
     for player in players.iter() {
         let mut total_vp = player.victory_points;
         
-        // Add end-game bonuses
         if let Some(vineyard) = vineyards.iter().find(|v| v.owner == player.id) {
             let structures = Vec::new(); // TODO: Query actual structures
             total_vp += vineyard.get_end_game_bonus(&structures);
@@ -450,103 +616,6 @@ pub fn check_victory_system(
         
         next_state.set(GameState::GameOver);
     }
-}
-
-// Utility functions
-fn calculate_field_position(player_id: PlayerId, field_index: usize) -> Vec2 {
-    let field_x = -200.0 + ((field_index % 3) as f32 * 40.0);
-    let field_y = 100.0 - ((field_index / 3) as f32 * 40.0);
-    Vec2::new(field_x + (player_id.0 as f32 * 200.0), field_y)
-}
-
-fn spawn_construction_particles(
-    commands: &mut Commands,
-    position: Vec2,
-    settings: &AnimationSettings,
-) {
-    let particle_count = (15.0 * settings.particle_density) as usize;
-    let particles = create_construction_particles(position, particle_count);
-    
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform::from_translation(position.extend(3.0)),
-            ..default()
-        },
-        ParticleEffect {
-            particles,
-            effect_type: ParticleType::Construction,
-            timer: Timer::from_seconds(1.2, TimerMode::Once),
-        },
-    ));
-}
-
-fn spawn_victory_point_particles(
-    commands: &mut Commands,
-    position: Vec2,
-    vp_amount: u8,
-    settings: &AnimationSettings,
-) {
-    let particle_count = (vp_amount as f32 * 3.0 * settings.particle_density) as usize;
-    let particles = create_victory_point_particles(position, particle_count);
-    
-    commands.spawn((
-        SpriteBundle {
-            transform: Transform::from_translation(position.extend(3.0)),
-            ..default()
-        },
-        ParticleEffect {
-            particles,
-            effect_type: ParticleType::VictoryPoints,
-            timer: Timer::from_seconds(1.5, TimerMode::Once),
-        },
-    ));
-}
-
-fn create_construction_particles(center: Vec2, count: usize) -> Vec<Particle> {
-    use rand::Rng;
-    let mut rng = rand::rng();
-    
-    (0..count)
-        .map(|_| {
-            let angle = rng.random_range(0.0..std::f32::consts::TAU);
-            let speed = rng.random_range(30.0..80.0);
-            let velocity = Vec2::new(angle.cos(), angle.sin()) * speed;
-            
-            Particle {
-                position: Vec2::new(
-                    rng.random_range(-5.0..5.0),
-                    rng.random_range(-5.0..5.0),
-                ),
-                velocity,
-                life: rng.random_range(0.8..1.5),
-                max_life: 1.5,
-                size: rng.random_range(1.0..2.5),
-                color: Color::from(Srgba::new(0.8, 0.8, 0.8, 1.0)), // Gray dust
-            }
-        })
-        .collect()
-}
-
-fn create_victory_point_particles(center: Vec2, count: usize) -> Vec<Particle> {
-    use rand::Rng;
-    let mut rng = rand::rng();
-    
-    (0..count)
-        .map(|_| {
-            let angle = rng.random_range(-std::f32::consts::PI / 4.0..std::f32::consts::PI / 4.0);
-            let speed = rng.random_range(40.0..100.0);
-            let velocity = Vec2::new(angle.cos(), angle.sin()) * speed;
-            
-            Particle {
-                position: Vec2::new(rng.random_range(-8.0..8.0), 0.0),
-                velocity,
-                life: rng.random_range(1.2..2.0),
-                max_life: 2.0,
-                size: rng.random_range(2.0..4.0),
-                color: Color::from(Srgba::new(1.0, 1.0, 0.0, 1.0)), // Yellow stars
-            }
-        })
-        .collect()
 }
 
 // Apply residual income at the start of each spring
@@ -675,7 +744,6 @@ pub fn enhanced_make_wine_action(
     }
 }
 
-
 // 3. Add aging system
 pub fn year_end_aging_system(
     mut vineyards: Query<&mut Vineyard>,
@@ -702,8 +770,8 @@ pub fn enforce_hand_limit_system(
     if current_state.is_changed() && matches!(current_state.get(), GameState::Spring) {
         for mut hand in hands.iter_mut() {
             let total_cards = hand.vine_cards.len() + hand.wine_order_cards.len();
-            if total_cards > 7 {
-                let excess = total_cards - 7;
+            if total_cards > HAND_LIMIT {
+                let excess = total_cards - HAND_LIMIT;
                 // Simple implementation: remove vine cards first
                 for _ in 0..excess {
                     if !hand.vine_cards.is_empty() {
@@ -756,18 +824,7 @@ pub fn fall_visitor_system(
     text_query: Query<Entity, (With<Text>, Without<UIPanel>)>,
 ) {
     if text_query.is_empty() {
-        commands.spawn(Text2dBundle {
-            text: Text::from_section(
-                "FALL PHASE\nEach player draws a visitor card\n\nPress SPACE to continue",
-                TextStyle {
-                    font_size: 24.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
-            ..default()
-        });
+        spawn_phase_text(&mut commands, FALL_VISITOR_TEXT);
         
         // Each player draws a visitor card (simplified: give summer visitor)
         for player_id in &turn_order.players {
@@ -781,9 +838,7 @@ pub fn fall_visitor_system(
     }
     
     if keyboard.just_pressed(KeyCode::Space) {
-        for entity in text_query.iter() {
-            commands.entity(entity).despawn();
-        }
+        cleanup_phase_text(&mut commands, &text_query);
         next_state.set(GameState::Winter);
     }
 }
@@ -813,18 +868,7 @@ pub fn fall_draw_visitors_system(
     };
     
     if text_query.is_empty() {
-        commands.spawn(Text2dBundle {
-            text: Text::from_section(
-                "FALL PHASE\nEach player draws a visitor card\nPress SPACE to continue to Winter",
-                TextStyle {
-                    font_size: 24.0,
-                    color: Color::WHITE,
-                    ..default()
-                },
-            ),
-            transform: Transform::from_translation(Vec3::new(0.0, 200.0, 1000.0)),
-            ..default()
-        });
+        spawn_phase_text(&mut commands, "FALL PHASE\nEach player draws a visitor card\nPress SPACE to continue to Winter");
         
         // Draw visitor cards for each player in wake-up order
         for player_id in &turn_order.players {
@@ -849,9 +893,7 @@ pub fn fall_draw_visitors_system(
     }
     
     if keyboard.just_pressed(KeyCode::Space) {
-        for entity in text_query.iter() {
-            commands.entity(entity).despawn();
-        }
+        cleanup_phase_text(&mut commands, &text_query);
         next_state.set(GameState::Winter);
     }
 }

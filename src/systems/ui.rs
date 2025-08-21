@@ -9,37 +9,43 @@ pub fn main_menu_system(
     mut next_state: ResMut<NextState<GameState>>,
     mut commands: Commands,
     mut config: ResMut<GameConfig>,
-    text_query: Query<Entity, With<Text>>,
+    text_query: Query<Entity, With<PhaseText>>, // Changed query
 ) {
     if text_query.is_empty() {
-        commands.spawn(TextBundle::from_section(
-            "VITICULTURE - Enhanced Edition\n\nPress SPACE to Start Game\nPress 1-4 to set player count\nPress A to cycle AI count\nPress C to view player cards in-game",
-            TextStyle {
-                font_size: 28.0,
-                color: Color::WHITE,
+        commands.spawn((
+            TextBundle::from_section(
+                "VITICULTURE - Enhanced Edition\n\nPress SPACE to Start Game\nPress 1-4 to set player count\nPress A to cycle AI count\nPress C to view player cards in-game",
+                TextStyle {
+                    font_size: 28.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ).with_style(Style {
+                position_type: PositionType::Absolute,
+                top: Val::Px(200.0),
+                left: Val::Px(50.0),
                 ..default()
-            },
-        ).with_style(Style {
-            position_type: PositionType::Absolute,
-            top: Val::Px(200.0),
-            left: Val::Px(50.0),
-            ..default()
-        }));
+            }),
+            PhaseText, // Mark as phase text
+        ));
         
-        commands.spawn(TextBundle::from_section(
-            format!("Current Setup: {} players ({} AI)", 
-                   config.player_count, config.ai_count),
-            TextStyle {
-                font_size: 18.0,
-                color: Color::srgb(0.8, 0.8, 0.8),
+        commands.spawn((
+            TextBundle::from_section(
+                format!("Current Setup: {} players ({} AI)", 
+                       config.player_count, config.ai_count),
+                TextStyle {
+                    font_size: 18.0,
+                    color: Color::srgb(0.8, 0.8, 0.8),
+                    ..default()
+                },
+            ).with_style(Style {
+                position_type: PositionType::Absolute,
+                top: Val::Px(380.0),
+                left: Val::Px(50.0),
                 ..default()
-            },
-        ).with_style(Style {
-            position_type: PositionType::Absolute,
-            top: Val::Px(380.0),
-            left: Val::Px(50.0),
-            ..default()
-        }));
+            }),
+            PhaseText, // Mark as phase text
+        ));
     }
     
     // Player count selection
@@ -75,7 +81,7 @@ pub fn main_menu_system(
     }
 }
 
-fn clear_menu_text(commands: &mut Commands, text_query: &Query<Entity, With<Text>>) {
+fn clear_menu_text(commands: &mut Commands, text_query: &Query<Entity, With<PhaseText>>) {
     for entity in text_query.iter() {
         commands.entity(entity).despawn();
     }
@@ -148,20 +154,28 @@ pub fn setup_ui(commands: &mut Commands) {
     });
 }
 
+// Add a marker component for action board elements
+#[derive(Component)]
+pub struct ActionBoardElement;
+
 fn setup_action_board(parent: &mut ChildBuilder) {
-    parent.spawn(NodeBundle {
-        style: Style {
-            width: Val::Percent(50.0),
-            height: Val::Percent(100.0),
-            flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            padding: UiRect::all(Val::Px(20.0)),
+    parent.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(50.0),
+                height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                padding: UiRect::all(Val::Px(20.0)),
+                ..default()
+            },
+            background_color: Color::from(Srgba::new(0.1, 0.1, 0.1, 0.8)).into(),
             ..default()
         },
-        background_color: Color::from(Srgba::new(0.1, 0.1, 0.1, 0.8)).into(),
-        ..default()
-    }).with_children(|action_area| {
+        ActionBoardElement,
+    )).with_children(|action_area| {
+        // Summer Actions Header
         action_area.spawn(TextBundle::from_section(
             "SUMMER ACTIONS",
             TextStyle {
@@ -171,23 +185,17 @@ fn setup_action_board(parent: &mut ChildBuilder) {
             },
         ));
         
-        // Summer actions with bonus worker spaces
+        // Summer actions
         let summer_actions = [
-            (ActionSpace::DrawVine, false),
-            (ActionSpace::PlantVine, true), // Has bonus worker space
-            (ActionSpace::BuildStructure, false),
-            (ActionSpace::GiveTour, true), // Has bonus worker space
-            (ActionSpace::SellGrapes, false),
-            (ActionSpace::TrainWorker, false),
+            ("Draw Vine", ActionSpace::DrawVine, false),
+            ("Plant Vine (+1)", ActionSpace::PlantVine, true),
+            ("Build Structure", ActionSpace::BuildStructure, false),
+            ("Give Tour (+1)", ActionSpace::GiveTour, true),
+            ("Sell Grapes", ActionSpace::SellGrapes, false),
+            ("Train Worker", ActionSpace::TrainWorker, false),
         ];
         
-        for (action, has_bonus) in summer_actions {
-            let button_text = if has_bonus {
-                format!("{:?} (+1)", action)
-            } else {
-                format!("{:?}", action)
-            };
-            
+        for (label, action, _has_bonus) in summer_actions {
             action_area.spawn((
                 ButtonBundle {
                     style: Style {
@@ -203,17 +211,24 @@ fn setup_action_board(parent: &mut ChildBuilder) {
                 },
                 ActionButton { action },
             )).with_children(|button| {
-                button.spawn(TextBundle::from_section(
-                    button_text,
-                    TextStyle {
-                        font_size: 16.0,
-                        color: Color::BLACK,
-                        ..default()
-                    },
-                ));
+                // Store text directly in the button - this should persist
+                button.spawn(TextBundle {
+                    text: Text::from_section(
+                        label.to_string(),
+                        TextStyle {
+                            font_size: 16.0,
+                            color: Color::BLACK,
+                            ..default()
+                        },
+                    ),
+                    // Force the text to stay visible
+                    visibility: Visibility::Inherited,
+                    ..default()
+                });
             });
         }
         
+        // Winter Actions Header
         action_area.spawn(TextBundle::from_section(
             "WINTER ACTIONS",
             TextStyle {
@@ -223,21 +238,15 @@ fn setup_action_board(parent: &mut ChildBuilder) {
             },
         ));
         
-        // Winter actions with bonus worker spaces
+        // Winter actions
         let winter_actions = [
-            (ActionSpace::DrawWineOrder, false),
-            (ActionSpace::Harvest, true), // Has bonus worker space
-            (ActionSpace::MakeWine, true), // Has bonus worker space
-            (ActionSpace::FillOrder, false),
+            ("Draw Wine Order", ActionSpace::DrawWineOrder, false),
+            ("Harvest (+1)", ActionSpace::Harvest, true),
+            ("Make Wine (+1)", ActionSpace::MakeWine, true),
+            ("Fill Order", ActionSpace::FillOrder, false),
         ];
         
-        for (action, has_bonus) in winter_actions {
-            let button_text = if has_bonus {
-                format!("{:?} (+1)", action)
-            } else {
-                format!("{:?}", action)
-            };
-            
+        for (label, action, _has_bonus) in winter_actions {
             action_area.spawn((
                 ButtonBundle {
                     style: Style {
@@ -253,14 +262,20 @@ fn setup_action_board(parent: &mut ChildBuilder) {
                 },
                 ActionButton { action },
             )).with_children(|button| {
-                button.spawn(TextBundle::from_section(
-                    button_text,
-                    TextStyle {
-                        font_size: 16.0,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ));
+                // Store text directly in the button - this should persist
+                button.spawn(TextBundle {
+                    text: Text::from_section(
+                        label.to_string(),
+                        TextStyle {
+                            font_size: 16.0,
+                            color: Color::WHITE,
+                            ..default()
+                        },
+                    ),
+                    // Force the text to stay visible
+                    visibility: Visibility::Inherited,
+                    ..default()
+                });
             });
         }
     });
