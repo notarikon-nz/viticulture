@@ -1,13 +1,13 @@
 {
-  "total_games_played": 5,
-  "total_games_won": 0,
-  "total_time_played": 99.176834,
-  "highest_victory_points": 0,
-  "fastest_win_time": 0.0,
+  "total_games_played": 44,
+  "total_games_won": 10,
+  "total_time_played": 905.67065,
+  "highest_victory_points": 2,
+  "fastest_win_time": 16.517666,
   "favorite_actions": {},
-  "win_streak": 0,
-  "current_streak": 0,
-  "average_game_length": 19.835367,
-  "total_vp_earned": 0,
-  "total_lira_earned": 30
+  "win_streak": 10,
+  "current_streak": 10,
+  "average_game_length": 20.583422,
+  "total_vp_earned": 31,
+  "total_lira_earned": 259
 }

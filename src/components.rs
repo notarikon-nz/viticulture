@@ -13,6 +13,10 @@ pub struct GameStatusText;
 #[derive(Component)]
 pub struct ButtonText;
 
+// In components.rs, add:
+#[derive(Component)]
+pub struct GameOverModal;
+
 // 
 #[derive(States, Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub enum GameState {

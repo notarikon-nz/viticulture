@@ -96,6 +96,8 @@ fn main() {
 
                 animate_text_system,
                 ui_game_over_system,
+                main_menu_cleanup_system,
+
             ))
         .add_systems(Update, (
                 apply_residual_income_system,
@@ -103,7 +105,7 @@ fn main() {
                 display_player_cards_system,
 
                 // Persistence & QoL systems
-                save_game_system,
+                save_game_system.run_if(not(in_state(GameState::MainMenu).or_else(in_state(GameState::GameOver)))),                
                 load_game_system,
                 track_session_system,
                 balance::track_action_usage_system,
@@ -148,6 +150,8 @@ fn main() {
                 unstuck_system.run_if(testing_mode_enabled),
                 protected_setup_system.run_if(in_state(GameState::Setup).and_then(testing_mode_enabled)),
                 
+                debug_ai_setup_system.run_if(testing_mode_enabled),
+                
                 // Regular balance systems
                 statistics::track_action_usage_system,
                 dynamic_difficulty_system,
@@ -185,5 +189,36 @@ pub fn despawn_marked_entities(
 ) {
     for entity in query.iter() {
         commands.entity(entity).despawn(); // ← Now safe
+    }
+}
+
+// Debug system to verify AI setup
+pub fn debug_ai_setup_system(
+    ai_players: Query<&AIPlayer>,
+    players: Query<&Player>,
+    test_config: Res<AutoTestConfig>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    // Press F11 during testing to debug AI setup
+    if test_config.enabled && keyboard.just_pressed(KeyCode::F11) {
+        let total_players = players.iter().count();
+        let ai_entities = ai_players.iter().count();
+        let human_players = players.iter().filter(|p| !p.is_ai).count();
+        let ai_players_marked = players.iter().filter(|p| p.is_ai).count();
+        
+        info!("🔍 AI DEBUG:");
+        info!("  Total Players: {}", total_players);
+        info!("  Players marked as AI: {}", ai_players_marked);
+        info!("  AI entities: {}", ai_entities);
+        info!("  Human players: {}", human_players);
+        info!("  Expected AI: {}", test_config.ai_count);
+        
+        for ai in ai_players.iter() {
+            info!("  🤖 AI Entity: Player {:?} (difficulty: {:?})", ai.player_id, ai.difficulty);
+        }
+        
+        for player in players.iter() {
+            info!("  👤 Player {}: {} (AI: {})", player.id.0 + 1, player.name, player.is_ai);
+        }
     }
 }

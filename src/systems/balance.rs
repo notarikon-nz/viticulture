@@ -22,6 +22,7 @@ pub struct AutoTestConfig {
     pub fast_mode: bool,
     pub restart_timer: Timer, // Add timer to prevent immediate state changes
     pub ui_protected: bool,   // Flag to protect UI during testing
+    pub ai_count: u8,
 }
 
 impl AutoTestConfig {
@@ -33,6 +34,7 @@ impl AutoTestConfig {
             fast_mode: true,
             restart_timer: Timer::from_seconds(1.0, TimerMode::Once), // 1 second delay
             ui_protected: false,
+            ai_count: 1,
         }
     }
 }
@@ -47,6 +49,8 @@ pub fn auto_balance_test_system(
     time: Res<Time>,
     mut commands: Commands,
     existing_ui: Query<Entity, With<UIPanel>>,
+    modal_query: Query<Entity, With<GameOverModal>>,
+    config: Res<GameConfig>, // Add config to track game state
 ) {
     // Start auto-testing with F10
     if keyboard.just_pressed(KeyCode::F10) {
@@ -54,80 +58,83 @@ pub fn auto_balance_test_system(
         test_config.ai_only_mode = true;
         test_config.fast_mode = true;
         test_config.target_games = 10;
-        test_config.ui_protected = true; // Protect UI during testing
+        test_config.ui_protected = true;
         
         if test_config.enabled {
-            info!("Starting balance testing - {} games", test_config.target_games);
+            info!("🎯 Starting balance testing - {} games", test_config.target_games);
             results.games_played = 0;
             results.ai_wins = 0;
             results.human_wins = 0;
             
-            // Don't immediately restart - let current game finish naturally
             if matches!(current_state.get(), GameState::MainMenu) {
                 test_config.restart_timer.reset();
                 next_state.set(GameState::Setup);
             }
         } else {
-            info!("Balance testing stopped");
+            info!("❌ Balance testing stopped");
             test_config.ui_protected = false;
         }
     }
     
-    // Update restart timer
     test_config.restart_timer.tick(time.delta());
     
-    // Auto-restart games for testing with delay and UI protection
+    // Handle game completion during testing
     if test_config.enabled && matches!(current_state.get(), GameState::GameOver) {
         if results.games_played < test_config.target_games {
             
-            // Record game result only once per game
             if test_config.restart_timer.finished() {
                 let winner = find_winner(players);
                 if let Some(winner_name) = winner {
-                    info!("Game {} completed - Winner: {}", results.games_played + 1, winner_name);
+                    info!("✅ Test Game {} completed - Winner: {}", results.games_played + 1, winner_name);
                     if winner_name.contains("AI") {
                         results.ai_wins += 1;
                     } else {
                         results.human_wins += 1;
                     }
+                } else {
+                    info!("⚠️  Test Game {} completed - No clear winner", results.games_played + 1);
                 }
                 
                 results.games_played += 1;
                 
-                // Reset timer and restart game with UI protection
+                // Clean up game over modal during testing
+                for entity in modal_query.iter() {
+                    commands.entity(entity).despawn_recursive();
+                    info!("Cleaned up game over modal for test restart");
+                }
+                
                 test_config.restart_timer.reset();
                 
-                // Instead of going to Setup (which recreates UI), go directly to Spring
-                // This preserves the existing UI while resetting game state
-                restart_game_preserve_ui(&mut commands, &existing_ui, &mut next_state);
+                // Check if we've completed all test games
+                if results.games_played >= test_config.target_games {
+                    info!("🏁 All {} test games completed!", test_config.target_games);
+                    print_balance_results(&results);
+                    test_config.enabled = false;
+                    test_config.ui_protected = false;
+                    
+                    // Return to main menu after testing
+                    next_state.set(GameState::MainMenu);
+                } else {
+                    info!("🔄 Starting test game {}/{}", results.games_played + 1, test_config.target_games);
+                    restart_game_preserve_ui(&mut commands, &existing_ui, &mut next_state);
+                }
             }
-        } else {
-            // Testing complete
-            print_balance_results(&results);
-            test_config.enabled = false;
-            test_config.ui_protected = false;
         }
     }
 }
 
-// New function to restart game without destroying UI
+
 fn restart_game_preserve_ui(
     commands: &mut Commands,
     existing_ui: &Query<Entity, With<UIPanel>>,
     next_state: &mut ResMut<NextState<GameState>>,
 ) {
-    // Don't despawn UI - just reset game state
-    // The setup_game_system will handle resetting player data
-    
     info!("Restarting game while preserving UI...");
     
-    // Check if UI still exists
     if existing_ui.is_empty() {
-        // UI was lost, need to recreate it
         warn!("UI was lost during testing, will recreate");
         next_state.set(GameState::Setup);
     } else {
-        // UI exists, can safely restart game logic
         next_state.set(GameState::Spring);
     }
 }
@@ -164,51 +171,59 @@ pub fn protected_setup_system(
     test_config: Res<AutoTestConfig>,
     existing_ui: Query<Entity, With<UIPanel>>,
     existing_players: Query<Entity, With<Player>>,
+    existing_vineyards: Query<Entity, With<Vineyard>>,
+    existing_hands: Query<Entity, With<Hand>>,
+    existing_workers: Query<Entity, With<Worker>>,
+    existing_trackers: Query<Entity, With<ResidualPaymentTracker>>,
+    existing_ai_players: Query<Entity, With<AIPlayer>>, // Add AI cleanup
     mut turn_order: ResMut<TurnOrder>,
-    mut card_decks: ResMut<CardDecks>,
-    text_query: Query<Entity, With<Text>>,
-    existing_entities: Query<Entity, (Without<UIPanel>, Without<PhaseText>)>,
     current_state: Res<State<GameState>>,
-
 ) {
     // ONLY run this system during balance testing and in Setup state
     if !test_config.enabled || !matches!(current_state.get(), GameState::Setup) {
         return; // Let the normal setup system handle it
     }
-
-    // Only run in Setup state during testing
-    if !test_config.enabled {
-        // Normal setup - call the regular setup system
-        // Note: We need to call this differently since we have ResMut vs Res mismatch
-        setup_normal_game(
-            &mut commands, 
-            &mut next_state, 
-            &mut config, 
-            &mut turn_order, 
-            &mut card_decks,
-            &text_query,
-            &existing_entities
-        );
-        return;
-    }
     
-    // Testing mode setup - preserve UI, reset game data only
-    info!("Protected setup for balance testing");
+    info!("🔧 Protected setup for balance testing - cleaning up entities");
+    
+    // Clean up ALL old game entities
+    let cleanup_counts = (
+        existing_players.iter().count(),
+        existing_vineyards.iter().count(),
+        existing_hands.iter().count(),
+        existing_workers.iter().count(),
+        existing_trackers.iter().count(),
+        existing_ai_players.iter().count(), // Track AI cleanup
+    );
+    
+    info!("Cleaning up: {} players, {} vineyards, {} hands, {} workers, {} trackers, {} AI entities", 
+          cleanup_counts.0, cleanup_counts.1, cleanup_counts.2, cleanup_counts.3, cleanup_counts.4, cleanup_counts.5);
+    
+    // Despawn all game entities
+    for entity in existing_players.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in existing_vineyards.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in existing_hands.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in existing_workers.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in existing_trackers.iter() {
+        commands.entity(entity).despawn();
+    }
+    // Clean up AI entities
+    for entity in existing_ai_players.iter() {
+        commands.entity(entity).despawn();
+    }
     
     // Reset game config
     config.current_year = 1;
     
-    // Clean up old player entities (but not UI)
-    for entity in existing_players.iter() {
-        commands.entity(entity).despawn();
-    }
-    
-    // Clean up other game entities but preserve UI
-    for entity in existing_entities.iter() {
-        commands.entity(entity).despawn();
-    }
-    
-    // Reset turn order
+    // Reset turn order completely
     turn_order.players.clear();
     turn_order.current_player = 0;
     turn_order.wake_up_order.clear();
@@ -218,11 +233,14 @@ pub fn protected_setup_system(
     
     // If UI doesn't exist, create it
     if existing_ui.is_empty() {
+        info!("UI missing, recreating...");
         crate::systems::ui::setup_ui(&mut commands);
     }
     
+    info!("✅ Protected setup complete, advancing to Spring");
     next_state.set(GameState::Spring);
 }
+
 
 // Helper function that mimics the regular setup without type conflicts
 fn setup_normal_game(
@@ -300,6 +318,8 @@ fn setup_normal_game(
 }
 
 fn setup_test_players(commands: &mut Commands, config: &GameConfig, turn_order: &mut ResMut<TurnOrder>) {
+    info!("Creating {} test players ({} AI)", config.player_count, config.ai_count);
+    
     // Create players for testing
     for i in 0..config.player_count {
         let is_ai = i >= (config.player_count - config.ai_count);
@@ -312,6 +332,12 @@ fn setup_test_players(commands: &mut Commands, config: &GameConfig, turn_order: 
         let player = Player::new(i, name, is_ai);
         turn_order.players.push(player.id);
         commands.spawn(player);
+        
+        // Create AI component for AI players
+        if is_ai {
+            commands.spawn(AIPlayer::new(PlayerId(i), AIDifficulty::Intermediate));
+            info!("Created AI entity for Player {}", i + 1);
+        }
         
         // Create vineyard for each player
         commands.spawn(Vineyard::new(PlayerId(i)));
@@ -343,7 +369,11 @@ fn setup_test_players(commands: &mut Commands, config: &GameConfig, turn_order: 
             Clickable { size: Vec2::new(25.0, 25.0) },
         ));
     }
+    
+    info!("✅ Created {} total players with {} AI entities", config.player_count, config.ai_count);
 }
+
+
 // Enhanced fast test mode that doesn't break UI and ensures game progression
 pub fn fast_test_mode_system(
     test_config: Res<AutoTestConfig>,
@@ -459,7 +489,7 @@ fn advance_to_next_year(config: &mut ResMut<GameConfig>, next_state: &mut ResMut
     }
 }
 
-// Enhanced AI system for testing - much more aggressive
+// Enhanced fast AI system to show which AI is acting
 pub fn fast_ai_decision_system(
     time: Res<Time>,
     mut ai_players: Query<&mut AIPlayer>,
@@ -476,7 +506,7 @@ pub fn fast_ai_decision_system(
     audio_settings: Res<AudioSettings>,
     animation_settings: Res<AnimationSettings>,
     (mut trackers, structures): (Query<&mut ResidualPaymentTracker>, Query<&Structure>),
-    test_config: Res<AutoTestConfig>,
+    mut test_config: ResMut<AutoTestConfig>,
 ) {
     if !matches!(current_state.get(), GameState::Summer | GameState::Winter) {
         return;
@@ -488,6 +518,8 @@ pub fn fast_ai_decision_system(
     } else {
         1.5 // Normal decision time
     };
+    
+    let ai_count = ai_players.iter().count();
     
     // Process all AI players
     for mut ai_player in ai_players.iter_mut() {
@@ -537,12 +569,14 @@ pub fn fast_ai_decision_system(
                     );
                     
                     if test_config.enabled {
-                        info!("Fast AI: Player {:?} executed {:?}", ai_player.player_id, chosen_action);
+                        info!("🤖 AI Player {} executed {:?} ({} workers left)", 
+                              ai_player.player_id.0 + 1, chosen_action, available_workers - 1);
                     }
                 } else {
                     // AI can't find a valid action - this shouldn't happen
                     if test_config.enabled {
-                        warn!("Fast AI: Player {:?} has workers but no valid actions!", ai_player.player_id);
+                        warn!("🚨 AI Player {} has {} workers but no valid actions!", 
+                              ai_player.player_id.0 + 1, available_workers);
                     }
                 }
             }
@@ -807,20 +841,36 @@ pub fn game_length_tracking_system(
     mut results: ResMut<BalanceTestResults>,
     config: Res<GameConfig>,
     current_state: Res<State<GameState>>,
+    mut last_reported_year: Local<u8>,
+    test_config: Res<AutoTestConfig>,
 ) {
-    if matches!(current_state.get(), GameState::GameOver) {
+    // Only track when game actually ends, not every frame
+    if current_state.is_changed() && matches!(current_state.get(), GameState::GameOver) {
         let game_length = config.current_year as f32;
         
-        if results.games_played > 0 {
-            results.average_game_length = (results.average_game_length * (results.games_played - 1) as f32 + game_length) / results.games_played as f32;
-        } else {
-            results.average_game_length = game_length;
+        // Only report if this is a new game completion
+        if *last_reported_year != config.current_year {
+            *last_reported_year = config.current_year;
+            
+            if results.games_played > 0 {
+                results.average_game_length = (results.average_game_length * (results.games_played - 1) as f32 + game_length) / results.games_played as f32;
+            } else {
+                results.average_game_length = game_length;
+            }
+            
+            // Only log balance feedback during testing and not too frequently
+            if test_config.enabled && results.games_played % 3 == 0 {
+                if results.average_game_length < 4.0 {
+                    info!("📊 Games ending quickly (avg: {:.1} years) - consider increasing VP requirement", results.average_game_length);
+                } else if results.average_game_length > 8.0 {
+                    info!("📊 Games taking long (avg: {:.1} years) - consider decreasing VP requirement", results.average_game_length);
+                } else {
+                    info!("📊 Game length balanced (avg: {:.1} years)", results.average_game_length);
+                }
+            }
         }
-        
-        if results.average_game_length < 4.0 {
-            info!("Games ending too quickly - consider increasing VP requirement");
-        } else if results.average_game_length > 8.0 {
-            info!("Games taking too long - consider decreasing VP requirement");
-        }
+    } else if matches!(current_state.get(), GameState::Setup | GameState::Spring) {
+        // Reset for new game
+        *last_reported_year = 0;
     }
 }

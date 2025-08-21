@@ -4,16 +4,16 @@
       "id": 0,
       "name": "Player 1",
       "victory_points": 1,
-      "lira": 7,
-      "workers": 2,
+      "lira": 5,
+      "workers": 3,
       "grande_worker_available": true,
       "is_ai": false
     },
     {
       "id": 1,
       "name": "Player 2",
-      "victory_points": 0,
-      "lira": 6,
+      "victory_points": 1,
+      "lira": 5,
       "workers": 2,
       "grande_worker_available": true,
       "is_ai": false
@@ -21,7 +21,7 @@
     {
       "id": 2,
       "name": "Player 3",
-      "victory_points": 1,
+      "victory_points": 0,
       "lira": 4,
       "workers": 2,
       "grande_worker_available": true,
@@ -31,8 +31,8 @@
       "id": 3,
       "name": "AI Player 4",
       "victory_points": 0,
-      "lira": 5,
-      "workers": 3,
+      "lira": 6,
+      "workers": 2,
       "grande_worker_available": true,
       "is_ai": true
     }
@@ -87,11 +87,11 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 1,
-      "white_grapes": 1,
-      "red_wine": 1,
-      "white_wine": 1,
-      "lira": 7
+      "red_grapes": 9,
+      "white_grapes": 9,
+      "red_wine": 9,
+      "white_wine": 9,
+      "lira": 5
     },
     {
       "owner_id": 1,
@@ -142,11 +142,11 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 1,
-      "white_grapes": 1,
-      "red_wine": 1,
-      "white_wine": 1,
-      "lira": 6
+      "red_grapes": 9,
+      "white_grapes": 9,
+      "red_wine": 9,
+      "white_wine": 9,
+      "lira": 5
     },
     {
       "owner_id": 2,
@@ -197,10 +197,10 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 1,
-      "white_grapes": 1,
-      "red_wine": 1,
-      "white_wine": 1,
+      "red_grapes": 9,
+      "white_grapes": 9,
+      "red_wine": 9,
+      "white_wine": 9,
       "lira": 4
     },
     {
@@ -252,16 +252,21 @@
           "sold_this_year": false
         }
       ],
-      "red_grapes": 1,
-      "white_grapes": 1,
-      "red_wine": 1,
-      "white_wine": 1,
-      "lira": 5
+      "red_grapes": 9,
+      "white_grapes": 9,
+      "red_wine": 9,
+      "white_wine": 9,
+      "lira": 6
     }
   ],
   "hands": [
     {
       "owner_id": 0,
+      "vine_cards": [],
+      "wine_order_cards": []
+    },
+    {
+      "owner_id": 1,
       "vine_cards": [
         {
           "id": 29,
@@ -274,11 +279,6 @@
           "special_ability": null
         }
       ],
-      "wine_order_cards": []
-    },
-    {
-      "owner_id": 1,
-      "vine_cards": [],
       "wine_order_cards": []
     },
     {
@@ -330,6 +330,13 @@
     },
     {
       "owner_id": 0,
+      "is_grande": false,
+      "placed_at": null,
+      "position_x": -500.0,
+      "position_y": -140.0
+    },
+    {
+      "owner_id": 0,
       "is_grande": true,
       "placed_at": null,
       "position_x": -500.0,
@@ -393,13 +400,6 @@
     },
     {
       "owner_id": 3,
-      "is_grande": false,
-      "placed_at": null,
-      "position_x": -140.0,
-      "position_y": -140.0
-    },
-    {
-      "owner_id": 3,
       "is_grande": true,
       "placed_at": null,
       "position_x": -140.0,
@@ -419,11 +419,11 @@
   "config": {
     "player_count": 4,
     "target_victory_points": 20,
-    "current_year": 1,
+    "current_year": 8,
     "max_years": 7,
     "ai_count": 1
   },
-  "current_state": 3,
+  "current_state": 0,
   "action_spaces": [
     {
       "action": 0,

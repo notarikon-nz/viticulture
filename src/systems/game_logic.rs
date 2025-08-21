@@ -549,20 +549,35 @@ pub fn fall_system(
     }
 }
 
+
 pub fn check_victory_system(
     players: Query<&Player>,
     vineyards: Query<&Vineyard>,
     mut next_state: ResMut<NextState<GameState>>,
     config: Res<GameConfig>,
     mut commands: Commands,
-    text_query: Query<Entity, With<Text>>,
+    text_query: Query<Entity, With<PhaseText>>,
+    current_state: Res<State<GameState>>,
+    existing_modal: Query<Entity, With<GameOverModal>>,
 ) {
+    // Don't check victory if already in GameOver state
+    if matches!(current_state.get(), GameState::GameOver) {
+        return;
+    }
+    
+    // Don't create multiple modals
+    if !existing_modal.is_empty() {
+        return;
+    }
+    
     let mut winner: Option<&Player> = None;
     let mut highest_vp = 0;
     
+    // Check all players for victory points
     for player in players.iter() {
         let mut total_vp = player.victory_points;
         
+        // Add end-game bonuses
         if let Some(vineyard) = vineyards.iter().find(|v| v.owner == player.id) {
             let structures = Vec::new(); // TODO: Query actual structures
             total_vp += vineyard.get_end_game_bonus(&structures);
@@ -578,7 +593,9 @@ pub fn check_victory_system(
     
     let year_limit_reached = config.current_year > config.max_years;
     
+    // Check for victory conditions
     if winner.is_some() || year_limit_reached {
+        // If no winner from VP, find highest scoring player
         if winner.is_none() && year_limit_reached {
             for player in players.iter() {
                 let mut total_vp = player.victory_points;
@@ -593,29 +610,118 @@ pub fn check_victory_system(
             }
         }
         
+        // Clean up only phase text
         for entity in text_query.iter() {
             commands.entity(entity).despawn();
         }
         
         if let Some(winning_player) = winner {
-            commands.spawn(TextBundle::from_section(
-                format!("GAME OVER!\n{} WINS with {} Victory Points!\n\nPress SPACE to play again", 
-                        winning_player.name, highest_vp),
-                TextStyle {
-                    font_size: 32.0,
-                    color: Color::from(GOLD),
-                    ..default()
-                },
-            ).with_style(Style {
-                position_type: PositionType::Absolute,
-                top: Val::Px(200.0),
-                left: Val::Px(100.0),
-                ..default()
-            }));
+            info!("🏆 GAME WON! {} with {} Victory Points!", winning_player.name, highest_vp);
+            
+            // Create proper modal window instead of simple text
+            create_game_over_modal(&mut commands, &winning_player.name, highest_vp);
         }
         
         next_state.set(GameState::GameOver);
     }
+}
+
+// Create a proper modal window for game over
+fn create_game_over_modal(commands: &mut Commands, winner_name: &str, victory_points: u8) {
+    // Create backdrop
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                top: Val::Px(0.0),
+                left: Val::Px(0.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            background_color: Color::srgba(0.0, 0.0, 0.0, 0.7).into(), // Semi-transparent backdrop
+            z_index: ZIndex::Global(1000), // Very high z-index
+            ..default()
+        },
+        GameOverModal,
+    )).with_children(|backdrop| {
+        // Create modal window
+        backdrop.spawn(NodeBundle {
+            style: Style {
+                width: Val::Px(600.0),
+                height: Val::Px(400.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                padding: UiRect::all(Val::Px(40.0)),
+                border: UiRect::all(Val::Px(4.0)),
+                ..default()
+            },
+            background_color: Color::srgb(0.1, 0.1, 0.15).into(),
+            border_color: Color::srgb(1.0, 0.84, 0.0).into(), // Gold border
+            ..default()
+        }).with_children(|modal| {
+            // Title
+            modal.spawn(TextBundle::from_section(
+                "🏆 GAME OVER! 🏆",
+                TextStyle {
+                    font_size: 48.0,
+                    color: Color::srgb(1.0, 0.84, 0.0), // Gold
+                    ..default()
+                },
+            ));
+            
+            // Spacer
+            modal.spawn(NodeBundle {
+                style: Style {
+                    height: Val::Px(20.0),
+                    ..default()
+                },
+                ..default()
+            });
+            
+            // Winner text
+            modal.spawn(TextBundle::from_section(
+                format!("{} WINS!", winner_name),
+                TextStyle {
+                    font_size: 32.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+            
+            // Victory points
+            modal.spawn(TextBundle::from_section(
+                format!("with {} Victory Points", victory_points),
+                TextStyle {
+                    font_size: 24.0,
+                    color: Color::srgb(0.8, 0.8, 0.8),
+                    ..default()
+                },
+            ));
+            
+            // Spacer
+            modal.spawn(NodeBundle {
+                style: Style {
+                    height: Val::Px(30.0),
+                    ..default()
+                },
+                ..default()
+            });
+            
+            // Instructions
+            modal.spawn(TextBundle::from_section(
+                "Press SPACE to play again",
+                TextStyle {
+                    font_size: 20.0,
+                    color: Color::srgb(0.6, 0.8, 1.0), // Light blue
+                    ..default()
+                },
+            ));
+        });
+    });
 }
 
 // Apply residual income at the start of each spring

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::components::*;
+use crate::systems::balance::*;
 
 const YELLOW: Srgba = Srgba::new(1.0, 1.0, 0.0, 1.0);
 const GOLD: Srgba = Srgba::new(1.0, 0.84, 0.0, 1.0);
@@ -424,12 +425,38 @@ pub fn ui_game_over_system(
     current_state: Res<State<GameState>>,
     mut commands: Commands,
     ui_query: Query<Entity, With<UIPanel>>,
+    modal_query: Query<Entity, With<GameOverModal>>,
+    phase_text_query: Query<Entity, With<PhaseText>>,
+    test_config: Res<AutoTestConfig>,
 ) {
-    if matches!(current_state.get(), GameState::GameOver) && keyboard.just_pressed(KeyCode::Space) {
-        for entity in ui_query.iter() {
+    // Only handle input when in GameOver state and modal exists
+    if matches!(current_state.get(), GameState::GameOver) && !modal_query.is_empty() && keyboard.just_pressed(KeyCode::Space) {
+        info!("Player pressed SPACE on game over modal");
+        
+        // Clean up all game over UI elements
+        for entity in modal_query.iter() {
             commands.entity(entity).despawn_recursive();
+            info!("Despawned game over modal");
         }
-        next_state.set(GameState::MainMenu);
+        
+        // Clean up any remaining phase text
+        for entity in phase_text_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        
+        // Different behavior for testing vs normal gameplay
+        if test_config.enabled {
+            info!("Testing mode: restarting game immediately");
+            // During testing, restart immediately without going to main menu
+            next_state.set(GameState::Setup);
+        } else {
+            info!("Normal mode: returning to main menu");
+            // Normal gameplay: clean up and return to main menu
+            for entity in ui_query.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
+            next_state.set(GameState::MainMenu);
+        }
     }
 }
 
@@ -530,5 +557,32 @@ pub fn display_player_cards_system(
                 commands.entity(entity).despawn_recursive();
             }
         }
+    }
+}
+
+pub fn main_menu_cleanup_system(
+    mut commands: Commands,
+    current_state: Res<State<GameState>>,
+    phase_text_query: Query<Entity, With<PhaseText>>,
+    modal_query: Query<Entity, With<GameOverModal>>,
+    mut cleanup_done: Local<bool>,
+) {
+    if matches!(current_state.get(), GameState::MainMenu) {
+        if !*cleanup_done {
+            // Clean up any lingering game over elements when entering main menu
+            for entity in modal_query.iter() {
+                commands.entity(entity).despawn_recursive();
+                info!("Cleaned up game over modal on main menu entry");
+            }
+            
+            for entity in phase_text_query.iter() {
+                commands.entity(entity).despawn();
+                info!("Cleaned up phase text on main menu entry");
+            }
+            
+            *cleanup_done = true;
+        }
+    } else {
+        *cleanup_done = false;
     }
 }
